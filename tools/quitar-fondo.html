@@ -66,7 +66,7 @@
   </header>
 
   <div class="notice">
-    ⚠️ <div>Funciona con personas, productos, animales y la mayoría de fotos con un sujeto claro. Ninguna herramienta gratuita de este tipo acierta el 100% de las veces — fotos con poco contraste o bordes muy finos (pelo suelto, humo, vidrio) pueden salir menos precisas.</div>
+    ⚠️ <div>Usa un modelo de IA más preciso (~55MB) que se descarga la primera vez que conviertes una imagen — puede tardar unos segundos según tu conexión, y después queda guardado en el navegador. Funciona con personas, productos, animales y la mayoría de fotos con un sujeto claro; ninguna herramienta gratuita acierta el 100% siempre.</div>
   </div>
 
   <div class="steps">
@@ -116,7 +116,7 @@
     </div>
   </div>
 
-  <div class="footer-note">El procesamiento ocurre 100% en tu navegador. La primera vez tarda más porque descarga el modelo de IA (~18MB).</div>
+  <div class="footer-note">El procesamiento ocurre 100% en tu navegador. La primera vez tarda bastante más porque descarga un modelo de IA de alta precisión (~55MB) — después queda guardado en tu navegador.</div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -202,7 +202,7 @@ ort.env.wasm.numThreads = 1;
 async function ensureModel(onProgress){
   if (ortSession) return ortSession;
 
-  const resp = await fetch(new URL('../vendor/segment/u2netp.onnx', document.baseURI).href);
+  const resp = await fetch(new URL('../vendor/segment/silueta.onnx', document.baseURI).href);
   const total = parseInt(resp.headers.get('content-length') || '0', 10);
   const reader = resp.body.getReader();
   const chunks = [];
@@ -237,14 +237,27 @@ async function segmentOnce(session, imgEl){
   inCtx.drawImage(imgEl, 0, 0, size, size);
   const src = inCtx.getImageData(0, 0, size, size).data;
 
+  // Match the reference preprocessing exactly: it normalizes by the
+  // image's own max pixel value (im_ary / max(np.max(im_ary), 1e-6)),
+  // not a fixed /255. In most photos the brightest pixel is ~255 so this
+  // rarely matters, but for a duller/lower-contrast render it does — and
+  // the model was trained expecting exactly this normalization.
+  let maxVal = 0;
+  for (let i = 0; i < src.length; i += 4){
+    if (src[i] > maxVal) maxVal = src[i];
+    if (src[i + 1] > maxVal) maxVal = src[i + 1];
+    if (src[i + 2] > maxVal) maxVal = src[i + 2];
+  }
+  maxVal = Math.max(maxVal, 1e-6);
+
   const mean = [0.485, 0.456, 0.406];
   const std = [0.229, 0.224, 0.225];
   const plane = size * size;
   const input = new Float32Array(3 * plane);
   for (let i = 0; i < plane; i++){
-    input[i]             = (src[i * 4]     / 255 - mean[0]) / std[0];
-    input[plane + i]     = (src[i * 4 + 1] / 255 - mean[1]) / std[1];
-    input[2 * plane + i] = (src[i * 4 + 2] / 255 - mean[2]) / std[2];
+    input[i]             = (src[i * 4]     / maxVal - mean[0]) / std[0];
+    input[plane + i]     = (src[i * 4 + 1] / maxVal - mean[1]) / std[1];
+    input[2 * plane + i] = (src[i * 4 + 2] / maxVal - mean[2]) / std[2];
   }
 
   const tensor = new ort.Tensor('float32', input, [1, 3, size, size]);
