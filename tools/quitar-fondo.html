@@ -328,25 +328,36 @@ convertBtn.addEventListener('click', async () => {
     const corners = [sampleBlock(0, 0), sampleBlock(w - 4, 0), sampleBlock(0, h - 4), sampleBlock(w - 4, h - 4)];
     const bg = [0, 1, 2].map(c => corners.reduce((s, v) => s + v[c], 0) / corners.length);
 
-    // IMPORTANT: do NOT hard-zero mid-confidence pixels here. An earlier
-    // version pushed anything under ~50% mask confidence to fully
-    // transparent to kill a dark edge halo — but on real photos (as
-    // opposed to the flat-color synthetic test images this was tuned on)
-    // the model's confidence across a legitimate part of the subject can
-    // dip into that range too, which deleted entire limbs/torso sections.
-    // Losing real content is a far worse failure than a faint edge tint,
-    // so we keep every pixel the model gives any real weight to and only
-    // clamp the decontamination math to avoid dividing by ~0 (which is
-    // what caused the original dark-fringe artifact).
-    const MIN_DECONTAMINATION_ALPHA = 0.15;
+    // IMPORTANT: never hard-zero mid-confidence pixels here (an earlier
+    // version did, and on real photos — unlike the flat-color synthetic
+    // images this was first tuned on — model confidence dips into that
+    // range over legitimate parts of the subject too, which deleted
+    // entire limbs/torso sections). Losing real content is far worse
+    // than an edge artifact, so every pixel the model gives any weight
+    // to is kept.
+    //
+    // Color decontamination (subtracting the background's contribution)
+    // is only mathematically valid for pixels that are a *true*
+    // anti-aliased blend of subject+background at the boundary — for
+    // that, mid-to-low mask confidence is a good proxy. But applying the
+    // same math to an interior pixel the model is merely *unsure* about
+    // (not an actual color blend) subtracts a background contribution
+    // that was never really there, producing a muddy/grayish smudge
+    // instead of the subject's real color. So: only decontaminate
+    // pixels close to full confidence (a real thin edge band); anything
+    // less sure keeps its original captured color, just partially
+    // transparent.
+    const DECONTAMINATE_ABOVE = 0.6;
 
     for (let i = 0; i < px.length; i += 4){
       const a = maskData[i];
       if (a > 0 && a < 255){
-        const af = Math.max(a / 255, MIN_DECONTAMINATION_ALPHA);
-        px[i]     = Math.min(255, Math.max(0, (px[i]     - (1 - af) * bg[0]) / af));
-        px[i + 1] = Math.min(255, Math.max(0, (px[i + 1] - (1 - af) * bg[1]) / af));
-        px[i + 2] = Math.min(255, Math.max(0, (px[i + 2] - (1 - af) * bg[2]) / af));
+        const af = a / 255;
+        if (af >= DECONTAMINATE_ABOVE){
+          px[i]     = Math.min(255, Math.max(0, (px[i]     - (1 - af) * bg[0]) / af));
+          px[i + 1] = Math.min(255, Math.max(0, (px[i + 1] - (1 - af) * bg[1]) / af));
+          px[i + 2] = Math.min(255, Math.max(0, (px[i + 2] - (1 - af) * bg[2]) / af));
+        }
       }
       px[i + 3] = a;
     }
