@@ -35,6 +35,42 @@
   .doc-preview img{ max-width:100%; }
   .doc-preview table{ border-collapse:collapse; width:100%; }
   .doc-preview td, .doc-preview th{ border:1px solid #ccc; padding:6px 8px; }
+
+  .spell-summary{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13px;
+    font-weight:700;
+    padding:10px 14px;
+    border-radius:10px;
+    margin-top:14px;
+  }
+  .spell-summary.ok{
+    color:var(--ok);
+    background:rgba(61,220,151,0.12);
+    border:1px solid rgba(61,220,151,0.3);
+  }
+  .spell-summary.warn{
+    color:#ffd166;
+    background:rgba(255,209,102,0.12);
+    border:1px solid rgba(255,209,102,0.3);
+  }
+  .spell-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:10px;
+  }
+  .spell-chip{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:999px;
+    padding:6px 12px;
+    font-size:12.5px;
+  }
+  .spell-chip .w{ color:var(--danger); font-weight:700; text-decoration:line-through; }
+  .spell-chip .s{ color:var(--ok); font-weight:700; }
 </style>
 </head>
 <body>
@@ -74,6 +110,10 @@
 
   <div class="card hidden" id="previewCard">
     <div class="doc-preview" id="docPreview"></div>
+
+    <button class="preview-btn" id="spellBtn">✍️ Revisar ortografía antes de descargar</button>
+    <div id="spellResults"></div>
+
     <button class="primary" id="convertBtn">✨ Descargar como PDF</button>
 
     <div class="progress-wrap" id="progressWrap">
@@ -97,6 +137,7 @@
 
 <script src="../vendor/mammoth/mammoth.browser.min.js"></script>
 <script src="../vendor/html2pdf/html2pdf.bundle.min.js"></script>
+<script src="../vendor/spellcheck/typo.js"></script>
 <script>
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('fileInput');
@@ -113,12 +154,39 @@ const toast = document.getElementById('toast');
 const resultCard = document.getElementById('resultCard');
 const resultMeta = document.getElementById('resultMeta');
 const resetBtn = document.getElementById('resetBtn');
+const spellBtn = document.getElementById('spellBtn');
+const spellResults = document.getElementById('spellResults');
 const step1 = document.getElementById('step1');
 const step2 = document.getElementById('step2');
 const step3 = document.getElementById('step3');
 
 let currentFile = null;
 let toastTimer = null;
+let dict = null;
+
+const WORD_RE = /[A-Za-zÀ-ÖØ-öø-ÿ]+/;
+const SPLIT_RE = /([^A-Za-zÀ-ÖØ-öø-ÿ]+)/;
+
+function isCheckable(word){
+  if (word.length < 2) return false;
+  if (/\d/.test(word)) return false;
+  return true;
+}
+function checkWord(d, word){
+  if (d.check(word)) return true;
+  if (d.check(word.toLowerCase())) return true;
+  return false;
+}
+
+async function ensureDict(){
+  if (dict) return dict;
+  const [affData, wordsData] = await Promise.all([
+    fetch('../vendor/spellcheck/es.aff').then(r => r.text()),
+    fetch('../vendor/spellcheck/es.dic').then(r => r.text())
+  ]);
+  dict = new Typo('es', affData, wordsData);
+  return dict;
+}
 
 function setStep(n){
   [step1, step2, step3].forEach((el, i) => {
@@ -150,6 +218,7 @@ async function handleFile(file){
     const arrayBuffer = await file.arrayBuffer();
     const result = await mammoth.convertToHtml({ arrayBuffer });
     docPreview.innerHTML = result.value || '<p><em>(Documento vacío)</em></p>';
+    spellResults.innerHTML = '';
     previewCard.classList.remove('hidden');
     setStep(2);
     previewCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -169,6 +238,49 @@ drop.addEventListener('drop', (e) => {
 });
 fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
 fileChange.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+
+spellBtn.addEventListener('click', async () => {
+  spellBtn.disabled = true;
+  spellBtn.textContent = '⏳ Revisando…';
+  try {
+    const d = await ensureDict();
+    const text = docPreview.innerText || '';
+    const parts = text.split(SPLIT_RE);
+    const misspelled = new Map();
+
+    for (const part of parts){
+      if (!part) continue;
+      if (WORD_RE.test(part) && part.match(WORD_RE)[0] === part){
+        if (isCheckable(part) && !checkWord(d, part)){
+          const key = part.toLowerCase();
+          if (!misspelled.has(key)){
+            const suggestions = d.suggest(part, 3);
+            misspelled.set(key, { word: part, suggestions });
+          }
+        }
+      }
+    }
+
+    if (misspelled.size === 0){
+      spellResults.innerHTML = '<div class="spell-summary ok">✓ No se encontraron errores de ortografía</div>';
+    } else {
+      let html = `<div class="spell-summary warn">⚠️ ${misspelled.size} palabra${misspelled.size === 1 ? '' : 's'} con posible error</div>`;
+      html += '<div class="spell-list">';
+      for (const { word, suggestions } of misspelled.values()){
+        const sugg = suggestions.length ? suggestions.slice(0, 2).join(', ') : 'sin sugerencias';
+        html += `<span class="spell-chip"><span class="w">${word}</span> → <span class="s">${sugg}</span></span>`;
+      }
+      html += '</div>';
+      spellResults.innerHTML = html;
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('No se pudo revisar la ortografía: ' + (err?.message || err));
+  } finally {
+    spellBtn.disabled = false;
+    spellBtn.textContent = '✍️ Revisar ortografía antes de descargar';
+  }
+});
 
 convertBtn.addEventListener('click', async () => {
   if (!currentFile) return;
@@ -210,6 +322,7 @@ resetBtn.addEventListener('click', () => {
   fileChip.classList.remove('show');
   previewCard.classList.add('hidden');
   docPreview.innerHTML = '';
+  spellResults.innerHTML = '';
   resultCard.classList.remove('show');
   setStep(1);
   window.scrollTo({ top: 0, behavior: 'smooth' });

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0d13">
+<title>Corrector ortográfico</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✍️</text></svg>">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  textarea#textInput{
+    width:100%;
+    min-height:220px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:12px;
+    padding:16px;
+    font-size:14.5px;
+    line-height:1.6;
+    font-family:inherit;
+    resize:vertical;
+  }
+  textarea#textInput:focus{ outline:none; border-color:var(--accent-2); }
+  .counts{
+    display:flex;
+    justify-content:space-between;
+    font-size:12px;
+    color:var(--muted);
+    margin-top:8px;
+  }
+  .summary-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-size:13px;
+    font-weight:700;
+    padding:8px 14px;
+    border-radius:999px;
+    margin-bottom:16px;
+  }
+  .summary-badge.ok{
+    color:var(--ok);
+    background:rgba(61,220,151,0.12);
+    border:1px solid rgba(61,220,151,0.3);
+  }
+  .summary-badge.warn{
+    color:#ffd166;
+    background:rgba(255,209,102,0.12);
+    border:1px solid rgba(255,209,102,0.3);
+  }
+  .result-text{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+    font-size:14.5px;
+    line-height:1.8;
+    white-space:pre-wrap;
+    word-wrap:break-word;
+  }
+  .err{
+    background:rgba(255,92,122,0.16);
+    border-bottom:2px solid var(--danger);
+    border-radius:3px;
+    cursor:pointer;
+    padding:0 1px;
+  }
+  .err:hover{ background:rgba(255,92,122,0.3); }
+  .err.fixed{
+    background:rgba(61,220,151,0.16);
+    border-bottom:2px solid var(--ok);
+  }
+
+  .suggest-pop{
+    position:fixed;
+    z-index:30;
+    background:var(--panel-solid);
+    border:1px solid var(--border-strong);
+    border-radius:10px;
+    padding:8px;
+    box-shadow:0 12px 30px rgba(0,0,0,0.5);
+    display:none;
+    min-width:160px;
+    max-width:260px;
+  }
+  .suggest-pop.show{ display:block; }
+  .suggest-pop .word-label{
+    font-size:11px;
+    color:var(--muted);
+    padding:4px 8px 6px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:4px;
+  }
+  .suggest-pop button{
+    display:block;
+    width:100%;
+    text-align:left;
+    background:none;
+    border:none;
+    color:var(--text);
+    padding:7px 8px;
+    border-radius:6px;
+    font-size:13.5px;
+    cursor:pointer;
+  }
+  .suggest-pop button:hover{ background:var(--panel-2); color:var(--accent-2); }
+  .suggest-pop .no-suggest{
+    color:var(--muted);
+    font-size:12.5px;
+    padding:6px 8px;
+  }
+
+  .toolbar{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:16px;
+  }
+  .toolbar button{ flex:1; min-width:140px; }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="wrap">
+  <a class="back-link" href="../index.html">← Todas las herramientas</a>
+  <header>
+    <div class="logo-badge">✍️</div>
+    <h1>Corrector ortográfico</h1>
+    <p>Pega o escribe tu texto y revisa errores de ortografía en español.</p>
+  </header>
+
+  <div class="card" id="inputCard">
+    <textarea id="textInput" placeholder="Escribe o pega aquí tu texto en español…"></textarea>
+    <div class="counts">
+      <span id="wordCount">0 palabras</span>
+      <span>Se procesa 100% en tu navegador</span>
+    </div>
+    <button class="primary" id="checkBtn">🔍 Revisar ortografía</button>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel"><span class="spin">⏳</span> Cargando diccionario…</div>
+    </div>
+  </div>
+
+  <div class="card result hidden" id="resultCard">
+    <div class="summary-badge" id="summaryBadge"></div>
+    <div class="result-text" id="resultText"></div>
+    <div class="toolbar">
+      <button class="ghost" id="copyBtn">📋 Copiar texto</button>
+      <button class="ghost" id="editBtn">✏️ Editar de nuevo</button>
+    </div>
+  </div>
+
+  <div class="footer-note">Diccionario en español (Hunspell). Puede no reconocer nombres propios, jerga o palabras muy técnicas.</div>
+</div>
+
+<div class="suggest-pop" id="suggestPop"></div>
+<div class="toast" id="toast"></div>
+
+<script src="../vendor/spellcheck/typo.js"></script>
+<script>
+const textInput = document.getElementById('textInput');
+const wordCount = document.getElementById('wordCount');
+const checkBtn = document.getElementById('checkBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const inputCard = document.getElementById('inputCard');
+const resultCard = document.getElementById('resultCard');
+const summaryBadge = document.getElementById('summaryBadge');
+const resultText = document.getElementById('resultText');
+const copyBtn = document.getElementById('copyBtn');
+const editBtn = document.getElementById('editBtn');
+const suggestPop = document.getElementById('suggestPop');
+const toast = document.getElementById('toast');
+
+let dict = null;
+let toastTimer = null;
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 4200);
+}
+
+textInput.addEventListener('input', () => {
+  const words = (textInput.value.match(/[A-Za-zÀ-ÖØ-öø-ÿ]+/g) || []).length;
+  wordCount.textContent = words + (words === 1 ? ' palabra' : ' palabras');
+});
+
+async function ensureDict(){
+  if (dict) return dict;
+  progressWrap.classList.add('show');
+  progressLabel.innerHTML = '<span class="spin">⏳</span> Cargando diccionario en español…';
+  progressFill.style.width = '30%';
+  const [affData, wordsData] = await Promise.all([
+    fetch('../vendor/spellcheck/es.aff').then(r => r.text()),
+    fetch('../vendor/spellcheck/es.dic').then(r => r.text())
+  ]);
+  progressFill.style.width = '90%';
+  dict = new Typo('es', affData, wordsData);
+  progressFill.style.width = '100%';
+  return dict;
+}
+
+const WORD_RE = /[A-Za-zÀ-ÖØ-öø-ÿ]+/;
+const SPLIT_RE = /([^A-Za-zÀ-ÖØ-öø-ÿ]+)/;
+
+function isCheckable(word){
+  if (word.length < 2) return false;
+  if (/\d/.test(word)) return false;
+  return true;
+}
+
+function checkWord(d, word){
+  if (d.check(word)) return true;
+  if (d.check(word.toLowerCase())) return true;
+  return false;
+}
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+checkBtn.addEventListener('click', async () => {
+  const text = textInput.value.trim();
+  if (!text){
+    showToast('Escribe o pega algún texto primero.');
+    return;
+  }
+  checkBtn.disabled = true;
+  try {
+    const d = await ensureDict();
+    progressLabel.innerHTML = '<span class="spin">🔎</span> Revisando…';
+
+    const parts = text.split(SPLIT_RE);
+    let errorCount = 0;
+    let html = '';
+    let idx = 0;
+
+    for (const part of parts){
+      if (!part) continue;
+      if (WORD_RE.test(part) && part.match(WORD_RE)[0] === part){
+        if (isCheckable(part) && !checkWord(d, part)){
+          errorCount++;
+          html += `<span class="err" data-idx="${idx}" data-word="${escapeHtml(part)}">${escapeHtml(part)}</span>`;
+          idx++;
+        } else {
+          html += escapeHtml(part);
+        }
+      } else {
+        html += escapeHtml(part);
+      }
+    }
+
+    resultText.innerHTML = html;
+
+    if (errorCount === 0){
+      summaryBadge.className = 'summary-badge ok';
+      summaryBadge.innerHTML = '✓ No se encontraron errores de ortografía';
+    } else {
+      summaryBadge.className = 'summary-badge warn';
+      summaryBadge.innerHTML = `⚠️ ${errorCount} posible${errorCount === 1 ? '' : 's'} error${errorCount === 1 ? '' : 'es'} encontrado${errorCount === 1 ? '' : 's'} — haz clic en las palabras marcadas`;
+    }
+
+    inputCard.classList.add('hidden');
+    resultCard.classList.remove('hidden');
+    resultCard.classList.remove('show');
+    void resultCard.offsetWidth;
+    resultCard.classList.add('show');
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    console.error(err);
+    showToast('Ocurrió un error al revisar el texto: ' + (err?.message || err));
+  } finally {
+    checkBtn.disabled = false;
+    setTimeout(() => progressWrap.classList.remove('show'), 500);
+  }
+});
+
+resultText.addEventListener('click', (e) => {
+  const span = e.target.closest('.err');
+  if (!span){ suggestPop.classList.remove('show'); return; }
+
+  const word = span.dataset.word;
+  const suggestions = dict.suggest(word, 6);
+
+  let html = `<div class="word-label">Sugerencias para "${escapeHtml(word)}"</div>`;
+  if (suggestions.length === 0){
+    html += '<div class="no-suggest">Sin sugerencias</div>';
+  } else {
+    suggestions.forEach(s => {
+      html += `<button type="button" data-replacement="${escapeHtml(s)}">${escapeHtml(s)}</button>`;
+    });
+  }
+  suggestPop.innerHTML = html;
+
+  const rect = span.getBoundingClientRect();
+  const popWidth = 220;
+  let left = rect.left;
+  if (left + popWidth > window.innerWidth - 10) left = window.innerWidth - popWidth - 10;
+  suggestPop.style.left = Math.max(10, left) + 'px';
+  suggestPop.style.top = (rect.bottom + 6) + 'px';
+  suggestPop.classList.add('show');
+  suggestPop._targetSpan = span;
+});
+
+suggestPop.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-replacement]');
+  if (!btn) return;
+  const span = suggestPop._targetSpan;
+  if (span){
+    span.textContent = btn.dataset.replacement;
+    span.classList.add('fixed');
+    span.classList.remove('err');
+  }
+  suggestPop.classList.remove('show');
+});
+
+document.addEventListener('click', (e) => {
+  if (!suggestPop.contains(e.target) && !e.target.closest('.err')){
+    suggestPop.classList.remove('show');
+  }
+});
+
+copyBtn.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(resultText.innerText);
+    showToast('Texto copiado al portapapeles.');
+  } catch (err) {
+    showToast('No se pudo copiar automáticamente. Selecciona el texto y copia manualmente.');
+  }
+});
+
+editBtn.addEventListener('click', () => {
+  resultCard.classList.remove('show');
+  inputCard.classList.remove('hidden');
+  suggestPop.classList.remove('show');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+</script>
+</body>
+</html>
