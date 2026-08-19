@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0b0d13">
-<title>Herramientas de imagen</title>
+<title>Comprimir y convertir imagen</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎨</text></svg>">
 <link rel="stylesheet" href="../assets/style.css">
 <style>
@@ -35,6 +35,33 @@
   .compare .box .l{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
   .compare .arrow{ display:flex; align-items:center; font-size:20px; color:var(--muted); }
   .saved{ color:var(--ok) !important; }
+
+  .capabilities{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:10px;
+    margin-bottom:18px;
+  }
+  .cap-item{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px 10px;
+    text-align:center;
+  }
+  .cap-item .cap-icon{ font-size:20px; margin-bottom:6px; }
+  .cap-item .cap-title{ font-size:12.5px; font-weight:700; margin-bottom:2px; }
+  .cap-item .cap-desc{ font-size:11px; color:var(--muted); line-height:1.35; }
+
+  .field-help{
+    font-size:11.5px;
+    color:var(--muted);
+    margin-top:2px;
+    line-height:1.4;
+  }
+  @media (max-width:520px){
+    .capabilities{ grid-template-columns:1fr; }
+  }
 </style>
 </head>
 <body>
@@ -44,9 +71,27 @@
   <a class="back-link" href="../index.html">← Todas las herramientas</a>
   <header>
     <div class="logo-badge">🎨</div>
-    <h1>Herramientas de imagen</h1>
-    <p>Comprime, redimensiona o convierte el formato de tus imágenes.</p>
+    <h1>Comprimir y convertir imagen</h1>
+    <p>Sube una imagen y elige qué hacer con ella. No necesitas usar todo a la vez.</p>
   </header>
+
+  <div class="capabilities">
+    <div class="cap-item">
+      <div class="cap-icon">📉</div>
+      <div class="cap-title">Pesa menos</div>
+      <div class="cap-desc">Baja la calidad para que el archivo ocupe menos espacio</div>
+    </div>
+    <div class="cap-item">
+      <div class="cap-icon">📐</div>
+      <div class="cap-title">Cambia el tamaño</div>
+      <div class="cap-desc">Reduce el ancho en píxeles, útil para subir a la web</div>
+    </div>
+    <div class="cap-item">
+      <div class="cap-icon">🔄</div>
+      <div class="cap-title">Cambia el formato</div>
+      <div class="cap-desc">Convierte entre JPG, PNG y WebP</div>
+    </div>
+  </div>
 
   <div class="steps">
     <div class="step" id="step1"><span class="num">1</span><span class="label">Subir</span></div>
@@ -78,15 +123,18 @@
           <option value="image/png">PNG</option>
           <option value="image/webp">WebP</option>
         </select>
+        <div class="field-help">A qué formato se convertirá el archivo final. Si no quieres convertir, deja el mismo formato de tu imagen original.</div>
       </div>
       <div class="field" id="qualityField">
         <label>Calidad <span class="value" id="qualityVal">80%</span></label>
         <input type="range" id="qualityRange" min="10" max="100" step="5" value="80">
+        <div class="field-help">Más baja = archivo más liviano, pero con más pérdida de nitidez. 80% es un buen punto medio.</div>
       </div>
     </div>
     <div class="field" style="margin-top:16px;">
       <label>Ancho máximo <span class="value" id="widthVal">Original</span></label>
       <input type="range" id="widthRange" min="0" max="4000" step="20" value="0">
+      <div class="field-help">Reduce las dimensiones de la imagen en píxeles. Déjalo en "Original" si no quieres cambiar el tamaño, solo el peso o el formato.</div>
     </div>
 
     <button class="primary" id="convertBtn">✨ Procesar imagen</button>
