@@ -300,10 +300,10 @@ button.cta-btn, a.cta-btn{
 .hero-section{ text-align:center; padding:8px 0 0; }
 .hero-section h1{
   font-size:44px;
-  line-height:1.15;
+  line-height:1.18;
   font-weight:800;
   letter-spacing:-0.02em;
-  margin:0 0 20px;
+  margin:0 0 28px;
 }
 .hero-section h1 .grad{
   background:linear-gradient(90deg,var(--accent-2),var(--accent));
@@ -313,10 +313,22 @@ button.cta-btn, a.cta-btn{
 }
 .hero-section .sub{
   max-width:600px;
-  margin:0 auto 30px;
+  margin:0 auto;
   color:var(--muted);
   font-size:16px;
-  line-height:1.65;
+  line-height:1.7;
+}
+.hero-divider{
+  width:64px;
+  height:3px;
+  margin:38px auto;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--accent-2),var(--accent),var(--accent-3));
+  background-size:200% auto;
+  animation:divider-shine 3.5s linear infinite;
+}
+@keyframes divider-shine{
+  to{ background-position:200% center; }
 }
 .hero-actions{
   display:flex;
