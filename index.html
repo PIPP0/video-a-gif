@@ -5,47 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0b0d13">
 <title>Caja de Herramientas</title>
+<meta name="description" content="Convierte video a GIF, PDF a imagen, comprime fotos y más — todo 100% en tu navegador, sin subir archivos a ningún servidor.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧰</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=3">
+<link rel="stylesheet" href="assets/style.css?v=4">
 <style>
-  .hero-cta{
-    display:flex;
-    gap:12px;
-    justify-content:center;
-    flex-wrap:wrap;
-    margin-top:22px;
-  }
-  .hero-cta a{ width:auto; min-width:180px; }
   .section-head{
     text-align:center;
-    margin:56px 0 8px;
+    margin:0 0 8px;
   }
   .section-head h2{
-    font-size:24px;
-    margin:0 0 8px;
+    font-size:28px;
+    margin:0 0 10px;
     font-weight:800;
     letter-spacing:-0.01em;
   }
-  .section-head p{ color:var(--muted); margin:0; font-size:14px; }
+  .section-head p{ color:var(--muted); margin:0; font-size:14.5px; max-width:520px; margin-left:auto; margin-right:auto; }
+  .section{ margin:88px 0; scroll-margin-top:84px; }
   .tool-card .plan-tag{ position:absolute; top:14px; right:14px; }
-  footer.site-footer{
+  .pricing-teaser{
     text-align:center;
-    margin-top:60px;
-    padding-top:26px;
-    border-top:1px solid var(--border);
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:44px 30px;
+    margin-top:34px;
   }
-  footer.site-footer .foot-links{
-    display:flex;
-    justify-content:center;
-    gap:18px;
-    margin-bottom:12px;
-    font-size:13px;
-  }
-  footer.site-footer .foot-links a{ color:var(--muted); text-decoration:none; }
-  footer.site-footer .foot-links a:hover{ color:var(--text); }
+  .pricing-teaser .cta-btn{ width:auto; display:inline-block; padding:14px 30px; margin-top:22px; }
 </style>
 </head>
 <body>
@@ -66,82 +54,190 @@
 </nav>
 
 <div class="wrap wide">
-  <header>
-    <div class="logo-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></div>
-    <h1>Caja de Herramientas</h1>
-    <p>Convierte archivos directo en tu navegador. Rápido, privado y sin instalar nada.</p>
-    <div class="trust-row">
-      <span>🔒 100% privado</span>
-      <span>⚡ Sin instalar nada</span>
-      <span>🆓 Gratis para empezar</span>
+
+  <section class="hero-section">
+    <span class="eyebrow"><span class="dot"></span> 100% en tu navegador, sin instalar nada</span>
+    <h1>Convierte tus archivos en segundos,<br><span class="grad">sin subirlos a internet</span></h1>
+    <p class="sub">Video a GIF, PDF a imagen, comprimir fotos, corregir ortografía y más. Todo corre dentro de tu navegador — tus archivos nunca salen de tu computador.</p>
+    <div class="hero-actions">
+      <a class="cta-btn solid" href="#herramientas">Ver herramientas →</a>
+      <a class="cta-btn outline" href="precios.html">Ver planes</a>
     </div>
-  </header>
 
-  <div class="tool-grid">
-    <a class="tool-card" href="tools/video-a-gif.html" style="--tc-a:#7c5cff; --tc-b:#ff6ec7;">
-      <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2"></rect><line x1="7" y1="4" x2="7" y2="20"></line><line x1="17" y1="4" x2="17" y2="20"></line><line x1="2.5" y1="9" x2="7" y2="9"></line><line x1="2.5" y1="15" x2="7" y2="15"></line><line x1="17" y1="9" x2="21.5" y2="9"></line><line x1="17" y1="15" x2="21.5" y2="15"></line></svg></div>
-      <h3>Video → GIF</h3>
-      <p>Recorta y convierte un video a GIF animado, con vista previa del clip.</p>
-      <span class="plan-tag free">Gratis</span>
-    </a>
-
-    <a class="tool-card" href="tools/pdf-a-imagen.html" style="--tc-a:#5ce1e6; --tc-b:#7c5cff;">
-      <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg></div>
-      <h3>PDF → JPG/PNG</h3>
-      <p>Convierte cada página de un PDF en imágenes descargables.</p>
-      <span class="plan-tag free">Gratis</span>
-    </a>
-
-    <a class="tool-card" href="tools/imagen.html" style="--tc-a:#3ddc97; --tc-b:#5ce1e6;">
-      <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg></div>
-      <h3>Compresión inteligente</h3>
-      <p>Reduce el peso, cambia el tamaño o convierte entre PNG, JPG y WebP.</p>
-      <span class="plan-tag free">Gratis</span>
-    </a>
-
-    <a class="tool-card" href="tools/pdf-utilidades.html" style="--tc-a:#ff6ec7; --tc-b:#ffd166;">
-      <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"></path></svg></div>
-      <h3>Unir / dividir PDF</h3>
-      <p>Une varios PDFs en uno, sepáralos por página, o crea un PDF desde imágenes.</p>
-      <span class="plan-tag free">Gratis</span>
-    </a>
-
-    <a class="tool-card" href="tools/corrector.html" style="--tc-a:#ffd166; --tc-b:#3ddc97;">
-      <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></div>
-      <h3>Corrector ortográfico</h3>
-      <p>Pega un texto y revisa errores de ortografía en español, con sugerencias.</p>
-      <span class="plan-tag free">Gratis</span>
-    </a>
-
-    <a class="tool-card" href="tools/word-a-pdf.html" style="--tc-a:#5c8dff; --tc-b:#5ce1e6;">
-      <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
-      <h3>Word → PDF</h3>
-      <p>Convierte un documento .docx a PDF. Ideal para textos simples. <em>(Beta)</em></p>
-      <span class="plan-tag free">Gratis</span>
-    </a>
-
-    <a class="tool-card" href="tools/quitar-fondo.html" style="--tc-a:#ffd166; --tc-b:#ff6ec7;">
-      <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></div>
-      <h3>Quitar fondo</h3>
-      <p>Elimina el fondo de fotos con personas (retratos, selfies). <em>(Beta)</em></p>
-      <span class="plan-tag free">Gratis</span>
-    </a>
-  </div>
-
-  <div class="section-head">
-    <h2>Gratis para siempre. Pro cuando lo necesites.</h2>
-    <p>Todas las herramientas son completas y sin costo. Pro suma límites más altos y funciones para uso intensivo.</p>
-  </div>
-  <div class="hero-cta">
-    <a class="cta-btn solid" href="precios.html" style="min-width:220px;">Ver planes y precios →</a>
-  </div>
-
-  <footer class="site-footer">
-    <div class="foot-links">
-      <a href="index.html">Herramientas</a>
-      <a href="precios.html">Precios</a>
+    <div class="stat-row">
+      <div class="stat"><div class="n">7</div><div class="l">herramientas</div></div>
+      <div class="stat"><div class="n">100%</div><div class="l">privado</div></div>
+      <div class="stat"><div class="n">$0</div><div class="l">para empezar</div></div>
     </div>
-    <div class="footer-note" style="margin-top:0;">Todas las herramientas funcionan 100% en tu navegador. Tus archivos nunca salen de tu equipo.</div>
+
+    <div class="browser-frame">
+      <div class="chrome-inner">
+        <div class="chrome">
+          <i></i><i></i><i></i>
+          <span class="url">🔒 cajadeherramientas.app/video-a-gif</span>
+        </div>
+        <div class="content">
+          <div class="mock-row">
+            <div class="mock-file-chip">🎥 vacaciones.mp4</div>
+          </div>
+          <div class="mock-preview"></div>
+          <div class="mock-timeline"><i></i></div>
+          <div class="mock-sliders">
+            <div class="mock-slider">
+              <div class="lbl"><span>FPS</span><span>12</span></div>
+              <div class="track"><i style="left:45%"></i></div>
+            </div>
+            <div class="mock-slider">
+              <div class="lbl"><span>Ancho</span><span>480px</span></div>
+              <div class="track"><i style="left:60%"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="floating-card">
+        <div class="fc-icon">✓</div>
+        <div>
+          <div class="fc-title">GIF listo</div>
+          <div class="fc-sub">0.8MB · generado en tu navegador</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="trust-bar">
+      <div class="eyebrow-label">Ideal para</div>
+      <div class="items">
+        <span>Estudiantes</span>
+        <span>Freelancers</span>
+        <span>Diseñadores</span>
+        <span>Oficinas</span>
+        <span>Creadores de contenido</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="herramientas">
+    <div class="section-head">
+      <div class="eyebrow-label">Herramientas</div>
+      <h2>Todo lo que necesitas, en un solo lugar</h2>
+      <p>Siete herramientas completas para los archivos del día a día. Sin cuentas, sin instalar nada, sin límite de usos.</p>
+    </div>
+
+    <div class="tool-grid" style="margin-top:34px;">
+      <a class="tool-card" href="tools/video-a-gif.html" style="--tc-a:#7c5cff; --tc-b:#ff6ec7;">
+        <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2"></rect><line x1="7" y1="4" x2="7" y2="20"></line><line x1="17" y1="4" x2="17" y2="20"></line><line x1="2.5" y1="9" x2="7" y2="9"></line><line x1="2.5" y1="15" x2="7" y2="15"></line><line x1="17" y1="9" x2="21.5" y2="9"></line><line x1="17" y1="15" x2="21.5" y2="15"></line></svg></div>
+        <h3>Video → GIF <span class="go-arrow">→</span></h3>
+        <p>Recorta y convierte un video a GIF animado, con vista previa del clip.</p>
+        <span class="plan-tag free">Gratis</span>
+      </a>
+
+      <a class="tool-card" href="tools/pdf-a-imagen.html" style="--tc-a:#5ce1e6; --tc-b:#7c5cff;">
+        <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg></div>
+        <h3>PDF → JPG/PNG <span class="go-arrow">→</span></h3>
+        <p>Convierte cada página de un PDF en imágenes descargables.</p>
+        <span class="plan-tag free">Gratis</span>
+      </a>
+
+      <a class="tool-card" href="tools/imagen.html" style="--tc-a:#3ddc97; --tc-b:#5ce1e6;">
+        <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg></div>
+        <h3>Compresión inteligente <span class="go-arrow">→</span></h3>
+        <p>Reduce el peso, cambia el tamaño o convierte entre PNG, JPG y WebP.</p>
+        <span class="plan-tag free">Gratis</span>
+      </a>
+
+      <a class="tool-card" href="tools/pdf-utilidades.html" style="--tc-a:#ff6ec7; --tc-b:#ffd166;">
+        <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"></path></svg></div>
+        <h3>Unir / dividir PDF <span class="go-arrow">→</span></h3>
+        <p>Une varios PDFs en uno, sepáralos por página, o crea un PDF desde imágenes.</p>
+        <span class="plan-tag free">Gratis</span>
+      </a>
+
+      <a class="tool-card" href="tools/corrector.html" style="--tc-a:#ffd166; --tc-b:#3ddc97;">
+        <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></div>
+        <h3>Corrector ortográfico <span class="go-arrow">→</span></h3>
+        <p>Pega un texto y revisa errores de ortografía en español, con sugerencias.</p>
+        <span class="plan-tag free">Gratis</span>
+      </a>
+
+      <a class="tool-card" href="tools/word-a-pdf.html" style="--tc-a:#5c8dff; --tc-b:#5ce1e6;">
+        <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
+        <h3>Word → PDF <span class="go-arrow">→</span></h3>
+        <p>Convierte un documento .docx a PDF. Ideal para textos simples. <em>(Beta)</em></p>
+        <span class="plan-tag free">Gratis</span>
+      </a>
+
+      <a class="tool-card" href="tools/quitar-fondo.html" style="--tc-a:#ffd166; --tc-b:#ff6ec7;">
+        <div class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></div>
+        <h3>Quitar fondo <span class="go-arrow">→</span></h3>
+        <p>Elimina el fondo de fotos con personas (retratos, selfies). <em>(Beta)</em></p>
+        <span class="plan-tag free">Gratis</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div class="eyebrow-label">Cómo funciona</div>
+      <h2>De tu archivo al resultado en 3 pasos</h2>
+      <p>Sin cuentas, sin subir nada a un servidor. El mismo flujo simple en las siete herramientas.</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="num">1</div>
+        <h4>Elige tu herramienta</h4>
+        <p>Video a GIF, PDF, imágenes, ortografía... elige la que necesitas desde el listado de arriba.</p>
+      </div>
+      <div class="step-card">
+        <div class="num">2</div>
+        <h4>Sube tu archivo</h4>
+        <p>Arrástralo o selecciónalo. Se procesa al instante dentro de tu propio navegador.</p>
+      </div>
+      <div class="step-card">
+        <div class="num">3</div>
+        <h4>Descarga el resultado</h4>
+        <p>Tu archivo convertido queda listo para descargar. Nunca pasó por ningún servidor.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="pricing-teaser">
+      <div class="eyebrow-label">Precios</div>
+      <h2 style="margin:0 0 10px; font-size:26px; font-weight:800;">Gratis para siempre. Pro cuando lo necesites.</h2>
+      <p style="color:var(--muted); font-size:14.5px; max-width:480px; margin:0 auto;">Todas las herramientas son completas y sin costo. Pro suma límites más altos para uso intensivo.</p>
+      <a class="cta-btn solid" href="precios.html">Ver planes y precios →</a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="site-footer-grid">
+      <div>
+        <div class="brand-col">
+          <span class="nav-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></span>
+          <span class="name">Caja de Herramientas</span>
+        </div>
+        <p class="tagline">Convierte archivos del día a día sin instalar nada y sin subir tus datos a ningún servidor. Hecho para gente que solo quiere resolver rápido.</p>
+      </div>
+      <div>
+        <h5>Herramientas</h5>
+        <ul>
+          <li><a href="tools/video-a-gif.html">Video → GIF</a></li>
+          <li><a href="tools/pdf-a-imagen.html">PDF → JPG/PNG</a></li>
+          <li><a href="tools/imagen.html">Compresión inteligente</a></li>
+          <li><a href="tools/corrector.html">Corrector ortográfico</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Sitio</h5>
+        <ul>
+          <li><a href="index.html">Herramientas</a></li>
+          <li><a href="precios.html">Precios</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Caja de Herramientas.</span>
+      <span>Tus archivos nunca salen de tu equipo.</span>
+    </div>
   </footer>
 </div>
 </body>
