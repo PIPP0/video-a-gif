@@ -66,7 +66,7 @@
   </header>
 
   <div class="notice">
-    ⚠️ <div>Optimizado para fotos con personas (retratos, selfies, medio cuerpo). Con objetos o productos sin personas, el resultado puede no ser preciso.</div>
+    ⚠️ <div>Funciona con personas, productos, animales y la mayoría de fotos con un sujeto claro. Ninguna herramienta gratuita de este tipo acierta el 100% de las veces — fotos con poco contraste o bordes muy finos (pelo suelto, humo, vidrio) pueden salir menos precisas.</div>
   </div>
 
   <div class="steps">
@@ -77,9 +77,9 @@
 
   <div class="card" id="uploadCard">
     <div class="drop" id="drop">
-      <div class="icon">🙋</div>
+      <div class="icon">🖼️</div>
       <div class="main">Arrastra una foto aquí o haz clic para elegir</div>
-      <div class="sub">Idealmente una persona bien visible</div>
+      <div class="sub">Personas, productos, animales… lo que tenga un sujeto claro</div>
       <input type="file" id="fileInput" accept="image/*">
     </div>
     <div class="file-chip" id="fileChip">
@@ -116,12 +116,12 @@
     </div>
   </div>
 
-  <div class="footer-note">El procesamiento ocurre 100% en tu navegador. La primera vez tarda más porque descarga el modelo (~6MB).</div>
+  <div class="footer-note">El procesamiento ocurre 100% en tu navegador. La primera vez tarda más porque descarga el modelo de IA (~18MB).</div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<script src="../vendor/selfie/selfie_segmentation.js"></script>
+<script src="../vendor/ort/ort.wasm.min.js"></script>
 <script>
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('fileInput');
@@ -146,7 +146,8 @@ const step3 = document.getElementById('step3');
 
 let currentImg = null;
 let toastTimer = null;
-let selfieSegmentation = null;
+let ortSession = null;
+const MODEL_SIZE = 320;
 
 function setStep(n){
   [step1, step2, step3].forEach((el, i) => {
@@ -195,27 +196,76 @@ drop.addEventListener('drop', (e) => {
 fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
 fileChange.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
 
-function ensureModel(){
-  if (selfieSegmentation) return selfieSegmentation;
-  selfieSegmentation = new SelfieSegmentation({
-    locateFile: (file) => new URL('../vendor/selfie/' + file, document.baseURI).href
-  });
-  selfieSegmentation.setOptions({ modelSelection: 0 });
-  return selfieSegmentation;
+ort.env.wasm.wasmPaths = { 'ort-wasm-simd-threaded.wasm': new URL('../vendor/ort/ort-wasm-simd-threaded.wasm', document.baseURI).href };
+ort.env.wasm.numThreads = 1;
+
+async function ensureModel(onProgress){
+  if (ortSession) return ortSession;
+
+  const resp = await fetch(new URL('../vendor/segment/u2netp.onnx', document.baseURI).href);
+  const total = parseInt(resp.headers.get('content-length') || '0', 10);
+  const reader = resp.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (true){
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (total) onProgress(received / total);
+  }
+  const modelBytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks){ modelBytes.set(chunk, offset); offset += chunk.length; }
+
+  ortSession = await ort.InferenceSession.create(modelBytes, { executionProviders: ['wasm'] });
+  return ortSession;
 }
 
-function segmentOnce(model, imgEl){
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Tiempo de espera agotado')), 30000);
-    model.onResults((results) => {
-      clearTimeout(timeout);
-      resolve(results);
-    });
-    model.send({ image: imgEl }).catch((err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-  });
+async function segmentOnce(session, imgEl){
+  const size = MODEL_SIZE;
+  const inCanvas = document.createElement('canvas');
+  inCanvas.width = size; inCanvas.height = size;
+  const inCtx = inCanvas.getContext('2d');
+  inCtx.drawImage(imgEl, 0, 0, size, size);
+  const src = inCtx.getImageData(0, 0, size, size).data;
+
+  const mean = [0.485, 0.456, 0.406];
+  const std = [0.229, 0.224, 0.225];
+  const plane = size * size;
+  const input = new Float32Array(3 * plane);
+  for (let i = 0; i < plane; i++){
+    input[i]             = (src[i * 4]     / 255 - mean[0]) / std[0];
+    input[plane + i]     = (src[i * 4 + 1] / 255 - mean[1]) / std[1];
+    input[2 * plane + i] = (src[i * 4 + 2] / 255 - mean[2]) / std[2];
+  }
+
+  const tensor = new ort.Tensor('float32', input, [1, 3, size, size]);
+  const feeds = {};
+  feeds[session.inputNames[0]] = tensor;
+  const out = await session.run(feeds);
+  const data = out[session.outputNames[0]].data;
+
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < data.length; i++){
+    if (data[i] < min) min = data[i];
+    if (data[i] > max) max = data[i];
+  }
+  const range = (max - min) || 1;
+
+  const maskSmall = document.createElement('canvas');
+  maskSmall.width = size; maskSmall.height = size;
+  const maskCtx = maskSmall.getContext('2d');
+  const maskImg = maskCtx.createImageData(size, size);
+  for (let i = 0; i < plane; i++){
+    const v = Math.max(0, Math.min(255, Math.round(((data[i] - min) / range) * 255)));
+    maskImg.data[i * 4] = v;
+    maskImg.data[i * 4 + 1] = v;
+    maskImg.data[i * 4 + 2] = v;
+    maskImg.data[i * 4 + 3] = 255;
+  }
+  maskCtx.putImageData(maskImg, 0, 0);
+  return maskSmall;
 }
 
 convertBtn.addEventListener('click', async () => {
@@ -227,12 +277,15 @@ convertBtn.addEventListener('click', async () => {
   progressLabel.innerHTML = '<span class="spin">⏳</span> Cargando modelo (una sola vez)…';
 
   try {
-    const model = ensureModel();
-    progressFill.style.width = '35%';
+    progressLabel.innerHTML = '<span class="spin">⏳</span> Cargando modelo de IA (una sola vez)…';
+    const session = await ensureModel((frac) => {
+      progressFill.style.width = Math.round(frac * 60) + '%';
+    });
+    progressFill.style.width = '65%';
     progressLabel.innerHTML = '<span class="spin">🧠</span> Analizando la imagen…';
 
-    const results = await segmentOnce(model, currentImg);
-    progressFill.style.width = '75%';
+    const maskSmall = await segmentOnce(session, currentImg);
+    progressFill.style.width = '85%';
     progressLabel.innerHTML = '<span class="spin">✂️</span> Recortando el fondo…';
 
     const w = currentImg.naturalWidth;
@@ -240,7 +293,7 @@ convertBtn.addEventListener('click', async () => {
 
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = w; maskCanvas.height = h;
-    maskCanvas.getContext('2d').drawImage(results.segmentationMask, 0, 0, w, h);
+    maskCanvas.getContext('2d').drawImage(maskSmall, 0, 0, w, h);
     const maskData = maskCanvas.getContext('2d').getImageData(0, 0, w, h).data;
 
     const imgCanvas = document.createElement('canvas');
@@ -270,20 +323,30 @@ convertBtn.addEventListener('click', async () => {
 
     // Sharpen the mask edge: push near-0/near-255 alphas to the extremes
     // so there's a thinner band of semi-transparent pixels to decontaminate.
-    const lo = 60, hi = 195;
+    const lo = 90, hi = 200;
     const sharpen = (a) => {
       if (a <= lo) return 0;
       if (a >= hi) return 255;
       return Math.round(((a - lo) / (hi - lo)) * 255);
     };
 
+    // Below this alpha, decontamination is too numerically unstable
+    // (dividing by a near-zero alpha amplifies noise into a visible
+    // dark/colored fringe) — treat those pixels as fully transparent
+    // instead of trying to "rescue" a sliver of foreground color.
+    const MIN_RELIABLE_ALPHA = 0.5;
+
     for (let i = 0; i < px.length; i += 4){
-      const a = sharpen(maskData[i]);
+      let a = sharpen(maskData[i]);
       if (a > 0 && a < 255){
         const af = a / 255;
-        px[i]     = Math.min(255, Math.max(0, (px[i]     - (1 - af) * bg[0]) / af));
-        px[i + 1] = Math.min(255, Math.max(0, (px[i + 1] - (1 - af) * bg[1]) / af));
-        px[i + 2] = Math.min(255, Math.max(0, (px[i + 2] - (1 - af) * bg[2]) / af));
+        if (af < MIN_RELIABLE_ALPHA){
+          a = 0;
+        } else {
+          px[i]     = Math.min(255, Math.max(0, (px[i]     - (1 - af) * bg[0]) / af));
+          px[i + 1] = Math.min(255, Math.max(0, (px[i + 1] - (1 - af) * bg[1]) / af));
+          px[i + 2] = Math.min(255, Math.max(0, (px[i + 2] - (1 - af) * bg[2]) / af));
+        }
       }
       px[i + 3] = a;
     }
