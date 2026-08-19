@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0d13">
+<title>Quitar fondo</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✂️</text></svg>">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .notice{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    background:rgba(255,209,102,0.08);
+    border:1px solid rgba(255,209,102,0.25);
+    border-radius:12px;
+    padding:12px 14px;
+    font-size:12.5px;
+    color:#e8d9a8;
+    margin-bottom:16px;
+  }
+  img.preview-img{
+    width:100%;
+    max-height:340px;
+    object-fit:contain;
+    border-radius:12px;
+    margin-top:16px;
+    background:repeating-conic-gradient(#20232c 0% 25%, #171a21 0% 50%) 50% / 20px 20px;
+  }
+  .side-by-side{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+  }
+  .side-by-side .col{ text-align:center; }
+  .side-by-side .lbl{ font-size:12px; color:var(--muted); margin-top:8px; font-weight:600; }
+  @media (max-width:520px){ .side-by-side{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="wrap">
+  <a class="back-link" href="../index.html">← Todas las herramientas</a>
+  <header>
+    <div class="logo-badge">✂️</div>
+    <h1>Quitar fondo</h1>
+    <p>Elimina el fondo de una foto directo en el navegador.</p>
+  </header>
+
+  <div class="notice">
+    ⚠️ <div>Optimizado para fotos con personas (retratos, selfies, medio cuerpo). Con objetos o productos sin personas, el resultado puede no ser preciso.</div>
+  </div>
+
+  <div class="steps">
+    <div class="step" id="step1"><span class="num">1</span><span class="label">Subir</span></div>
+    <div class="step" id="step2"><span class="num">2</span><span class="label">Procesar</span></div>
+    <div class="step" id="step3"><span class="num">3</span><span class="label">Descargar</span></div>
+  </div>
+
+  <div class="card" id="uploadCard">
+    <div class="drop" id="drop">
+      <div class="icon">🙋</div>
+      <div class="main">Arrastra una foto aquí o haz clic para elegir</div>
+      <div class="sub">Idealmente una persona bien visible</div>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+    <div class="file-chip" id="fileChip">
+      <span>🖼️</span>
+      <span class="name" id="fileName"></span>
+      <span class="change" id="fileChange">Cambiar</span>
+    </div>
+    <img id="preview" class="preview-img hidden" alt="Vista previa">
+  </div>
+
+  <div class="card hidden" id="optionsCard">
+    <button class="primary" id="convertBtn">✨ Quitar fondo</button>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel"><span class="spin">⏳</span> Cargando modelo (una sola vez)…</div>
+    </div>
+  </div>
+
+  <div class="card result" id="resultCard">
+    <div class="result-badge">✓ Listo</div>
+    <div class="side-by-side">
+      <div class="col">
+        <img id="beforeImg" class="preview-img" alt="Original">
+        <div class="lbl">Original</div>
+      </div>
+      <div class="col">
+        <img id="afterImg" class="preview-img" alt="Sin fondo">
+        <div class="lbl">Sin fondo</div>
+      </div>
+    </div>
+    <div class="result-actions" style="margin-top:16px;">
+      <a class="download" id="downloadLink" download="sin-fondo.png">⬇ Descargar PNG</a>
+      <button class="ghost" id="resetBtn">↻ Otra foto</button>
+    </div>
+  </div>
+
+  <div class="footer-note">El procesamiento ocurre 100% en tu navegador. La primera vez tarda más porque descarga el modelo (~6MB).</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../vendor/selfie/selfie_segmentation.js"></script>
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const fileChip = document.getElementById('fileChip');
+const fileName = document.getElementById('fileName');
+const fileChange = document.getElementById('fileChange');
+const preview = document.getElementById('preview');
+const optionsCard = document.getElementById('optionsCard');
+const convertBtn = document.getElementById('convertBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const toast = document.getElementById('toast');
+const resultCard = document.getElementById('resultCard');
+const beforeImg = document.getElementById('beforeImg');
+const afterImg = document.getElementById('afterImg');
+const downloadLink = document.getElementById('downloadLink');
+const resetBtn = document.getElementById('resetBtn');
+const step1 = document.getElementById('step1');
+const step2 = document.getElementById('step2');
+const step3 = document.getElementById('step3');
+
+let currentImg = null;
+let toastTimer = null;
+let selfieSegmentation = null;
+
+function setStep(n){
+  [step1, step2, step3].forEach((el, i) => {
+    el.classList.toggle('done', i + 1 < n);
+    el.classList.toggle('active', i + 1 === n);
+  });
+}
+setStep(1);
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 4200);
+}
+
+function handleFile(file){
+  if (!file || !file.type.startsWith('image/')){
+    showToast('Por favor elige un archivo de imagen válido.');
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    currentImg = img;
+    preview.src = url;
+    preview.classList.remove('hidden');
+    fileName.textContent = file.name;
+    fileChip.classList.add('show');
+    optionsCard.classList.remove('hidden');
+    resultCard.classList.remove('show');
+    setStep(2);
+    optionsCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  img.src = url;
+}
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drop.classList.remove('dragover');
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+fileChange.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+
+function ensureModel(){
+  if (selfieSegmentation) return selfieSegmentation;
+  selfieSegmentation = new SelfieSegmentation({
+    locateFile: (file) => new URL('../vendor/selfie/' + file, document.baseURI).href
+  });
+  selfieSegmentation.setOptions({ modelSelection: 0 });
+  return selfieSegmentation;
+}
+
+function segmentOnce(model, imgEl){
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Tiempo de espera agotado')), 30000);
+    model.onResults((results) => {
+      clearTimeout(timeout);
+      resolve(results);
+    });
+    model.send({ image: imgEl }).catch((err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
+}
+
+convertBtn.addEventListener('click', async () => {
+  if (!currentImg) return;
+  resultCard.classList.remove('show');
+  convertBtn.disabled = true;
+  progressWrap.classList.add('show');
+  progressFill.style.width = '15%';
+  progressLabel.innerHTML = '<span class="spin">⏳</span> Cargando modelo (una sola vez)…';
+
+  try {
+    const model = ensureModel();
+    progressFill.style.width = '35%';
+    progressLabel.innerHTML = '<span class="spin">🧠</span> Analizando la imagen…';
+
+    const results = await segmentOnce(model, currentImg);
+    progressFill.style.width = '75%';
+    progressLabel.innerHTML = '<span class="spin">✂️</span> Recortando el fondo…';
+
+    const w = currentImg.naturalWidth;
+    const h = currentImg.naturalHeight;
+
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = w; maskCanvas.height = h;
+    maskCanvas.getContext('2d').drawImage(results.segmentationMask, 0, 0, w, h);
+    const maskData = maskCanvas.getContext('2d').getImageData(0, 0, w, h).data;
+
+    const imgCanvas = document.createElement('canvas');
+    imgCanvas.width = w; imgCanvas.height = h;
+    const imgCtx = imgCanvas.getContext('2d');
+    imgCtx.drawImage(currentImg, 0, 0, w, h);
+    const imgData = imgCtx.getImageData(0, 0, w, h);
+
+    for (let i = 0; i < imgData.data.length; i += 4){
+      imgData.data[i + 3] = maskData[i];
+    }
+
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = w; outCanvas.height = h;
+    outCanvas.getContext('2d').putImageData(imgData, 0, 0);
+
+    const blob = await new Promise(resolve => outCanvas.toBlob(resolve, 'image/png'));
+    const url = URL.createObjectURL(blob);
+
+    beforeImg.src = currentImg.src;
+    afterImg.src = url;
+    downloadLink.href = url;
+
+    progressFill.style.width = '100%';
+    resultCard.classList.add('show');
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    progressLabel.textContent = '¡Listo!';
+    setStep(3);
+  } catch (err) {
+    console.error(err);
+    showToast('Ocurrió un error al quitar el fondo: ' + (err?.message || err));
+  } finally {
+    convertBtn.disabled = false;
+    setTimeout(() => progressWrap.classList.remove('show'), 800);
+  }
+});
+
+resetBtn.addEventListener('click', () => {
+  currentImg = null;
+  fileInput.value = '';
+  preview.src = '';
+  preview.classList.add('hidden');
+  fileChip.classList.remove('show');
+  optionsCard.classList.add('hidden');
+  resultCard.classList.remove('show');
+  setStep(1);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+</script>
+</body>
+</html>

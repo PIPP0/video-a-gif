@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0d13">
+<title>Unir y dividir PDF</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📎</text></svg>">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .tabs{
+    display:flex;
+    gap:8px;
+    justify-content:center;
+    margin:22px 0 20px;
+    flex-wrap:wrap;
+  }
+  .tab-btn{
+    padding:9px 16px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--panel-2);
+    color:var(--muted);
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+    transition:all .2s ease;
+  }
+  .tab-btn.active{
+    color:#fff;
+    border-color:transparent;
+    background:linear-gradient(90deg,var(--accent),var(--accent-3));
+  }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+
+  .file-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-top:14px;
+  }
+  .file-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 12px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    font-size:13px;
+  }
+  .file-row .idx{
+    width:22px; height:22px;
+    border-radius:50%;
+    background:var(--panel-solid);
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; color:var(--muted);
+    flex-shrink:0;
+  }
+  .file-row .fname{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-row .mv, .file-row .rm{
+    background:none; border:none; color:var(--muted); cursor:pointer; font-size:15px; padding:2px 6px;
+  }
+  .file-row .mv:hover, .file-row .rm:hover{ color:var(--text); }
+  .file-row .rm:hover{ color:var(--danger); }
+
+  .page-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));
+    gap:12px;
+    margin-top:16px;
+  }
+  .page-item{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .page-item img{ width:100%; display:block; background:#fff; }
+  .page-item .page-foot{
+    padding:8px; display:flex; align-items:center; justify-content:space-between;
+    gap:6px; font-size:11.5px; color:var(--muted);
+  }
+  .page-item a, .page-item button.linklike{
+    color:var(--accent-2); text-decoration:none; font-weight:700; background:none; border:none; cursor:pointer; font-size:11.5px;
+  }
+  .add-more{
+    margin-top:10px;
+    width:100%;
+    padding:10px;
+    border-radius:10px;
+    border:1px dashed var(--border-strong);
+    background:transparent;
+    color:var(--muted);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .add-more:hover{ color:var(--text); border-color:var(--accent-2); }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="wrap wide">
+  <a class="back-link" href="../index.html">← Todas las herramientas</a>
+  <header>
+    <div class="logo-badge">📎</div>
+    <h1>Herramientas de PDF</h1>
+    <p>Une, divide o crea PDFs desde imágenes. Nada se sube a ningún servidor.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="merge">🔗 Unir PDFs</button>
+    <button class="tab-btn" data-tab="split">✂️ Dividir PDF</button>
+    <button class="tab-btn" data-tab="img2pdf">🖼️ Imágenes → PDF</button>
+  </div>
+
+  <!-- UNIR -->
+  <div class="tab-panel active" id="panel-merge">
+    <div class="card" id="mergeUploadCard">
+      <div class="drop" id="mergeDrop">
+        <div class="icon">📎</div>
+        <div class="main">Arrastra dos o más PDFs aquí</div>
+        <div class="sub">Se unirán en el orden de la lista</div>
+        <input type="file" id="mergeInput" accept="application/pdf" multiple>
+      </div>
+      <div class="file-list" id="mergeList"></div>
+      <button class="add-more hidden" id="mergeAddMore">+ Agregar otro PDF</button>
+    </div>
+    <div class="card hidden" id="mergeActionCard">
+      <button class="primary" id="mergeBtn">✨ Unir PDFs</button>
+      <div class="progress-wrap" id="mergeProgressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="mergeProgressFill"></div></div>
+        <div class="progress-label" id="mergeProgressLabel"><span class="spin">⏳</span> Uniendo…</div>
+      </div>
+    </div>
+    <div class="card result" id="mergeResultCard">
+      <div class="result-badge">✓ Listo</div>
+      <div class="meta" id="mergeResultMeta"></div>
+      <div class="result-actions">
+        <a class="download" id="mergeDownload" download="unido.pdf">⬇ Descargar PDF unido</a>
+        <button class="ghost" id="mergeResetBtn">↻ Empezar de nuevo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIVIDIR -->
+  <div class="tab-panel" id="panel-split">
+    <div class="card" id="splitUploadCard">
+      <div class="drop" id="splitDrop">
+        <div class="icon">✂️</div>
+        <div class="main">Arrastra un PDF aquí o haz clic para elegir</div>
+        <div class="sub">Descarga cada página como PDF individual</div>
+        <input type="file" id="splitInput" accept="application/pdf">
+      </div>
+      <div class="file-chip" id="splitChip">
+        <span>📄</span>
+        <span class="name" id="splitFileName"></span>
+        <span class="change" id="splitChange">Cambiar</span>
+      </div>
+    </div>
+    <div class="card hidden" id="splitActionCard">
+      <button class="primary" id="splitBtn">✨ Dividir en páginas</button>
+      <div class="progress-wrap" id="splitProgressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="splitProgressFill"></div></div>
+        <div class="progress-label" id="splitProgressLabel"><span class="spin">⏳</span> Procesando…</div>
+      </div>
+    </div>
+    <div class="card result" id="splitResultCard">
+      <div class="result-badge">✓ Listo</div>
+      <div class="meta" id="splitResultMeta"></div>
+      <div class="page-grid" id="splitGrid"></div>
+      <div class="result-actions" style="margin-top:16px;">
+        <button class="ghost" id="splitResetBtn">↻ Otro PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMAGENES A PDF -->
+  <div class="tab-panel" id="panel-img2pdf">
+    <div class="card" id="imgUploadCard">
+      <div class="drop" id="imgDrop">
+        <div class="icon">🖼️</div>
+        <div class="main">Arrastra una o más imágenes aquí</div>
+        <div class="sub">Se ordenarán como páginas del PDF</div>
+        <input type="file" id="imgInput" accept="image/*" multiple>
+      </div>
+      <div class="file-list" id="imgList"></div>
+      <button class="add-more hidden" id="imgAddMore">+ Agregar otra imagen</button>
+    </div>
+    <div class="card hidden" id="imgActionCard">
+      <button class="primary" id="imgBtn">✨ Crear PDF</button>
+      <div class="progress-wrap" id="imgProgressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="imgProgressFill"></div></div>
+        <div class="progress-label" id="imgProgressLabel"><span class="spin">⏳</span> Generando…</div>
+      </div>
+    </div>
+    <div class="card result" id="imgResultCard">
+      <div class="result-badge">✓ Listo</div>
+      <div class="meta" id="imgResultMeta"></div>
+      <div class="result-actions">
+        <a class="download" id="imgDownload" download="imagenes.pdf">⬇ Descargar PDF</a>
+        <button class="ghost" id="imgResetBtn">↻ Empezar de nuevo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">Todo ocurre 100% en tu navegador. Tus archivos nunca salen de tu equipo.</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../vendor/pdflib/pdf-lib.min.js"></script>
+<script src="../vendor/pdfjs/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.min.js', document.baseURI).href;
+const { PDFDocument } = PDFLib;
+
+const toast = document.getElementById('toast');
+let toastTimer = null;
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 4200);
+}
+function fmtBytes(n){
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(2) + ' MB';
+}
+
+// ---- Tabs ----
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ---- UNIR PDFs ----
+(function(){
+  const drop = document.getElementById('mergeDrop');
+  const input = document.getElementById('mergeInput');
+  const list = document.getElementById('mergeList');
+  const addMore = document.getElementById('mergeAddMore');
+  const actionCard = document.getElementById('mergeActionCard');
+  const btn = document.getElementById('mergeBtn');
+  const progressWrap = document.getElementById('mergeProgressWrap');
+  const progressFill = document.getElementById('mergeProgressFill');
+  const progressLabel = document.getElementById('mergeProgressLabel');
+  const resultCard = document.getElementById('mergeResultCard');
+  const resultMeta = document.getElementById('mergeResultMeta');
+  const download = document.getElementById('mergeDownload');
+  const resetBtn = document.getElementById('mergeResetBtn');
+
+  let files = [];
+
+  function render(){
+    list.innerHTML = '';
+    files.forEach((f, i) => {
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      row.innerHTML = `
+        <span class="idx">${i + 1}</span>
+        <span class="fname">${f.name}</span>
+        <button class="mv" data-dir="-1" data-i="${i}" title="Subir">↑</button>
+        <button class="mv" data-dir="1" data-i="${i}" title="Bajar">↓</button>
+        <button class="rm" data-i="${i}" title="Quitar">✕</button>
+      `;
+      list.appendChild(row);
+    });
+    addMore.classList.toggle('hidden', files.length === 0);
+    actionCard.classList.toggle('hidden', files.length < 2);
+    resultCard.classList.remove('show');
+    if (files.length === 0) drop.classList.remove('hidden'); else drop.classList.add('hidden');
+  }
+
+  list.addEventListener('click', (e) => {
+    const i = parseInt(e.target.dataset.i, 10);
+    if (Number.isNaN(i)) return;
+    if (e.target.classList.contains('rm')){
+      files.splice(i, 1);
+    } else if (e.target.classList.contains('mv')){
+      const dir = parseInt(e.target.dataset.dir, 10);
+      const j = i + dir;
+      if (j < 0 || j >= files.length) return;
+      [files[i], files[j]] = [files[j], files[i]];
+    }
+    render();
+  });
+
+  function addFiles(fileListLike){
+    const newOnes = Array.from(fileListLike).filter(f => f.type === 'application/pdf');
+    if (newOnes.length === 0){
+      showToast('Por favor elige archivos PDF válidos.');
+      return;
+    }
+    files = files.concat(newOnes);
+    render();
+  }
+
+  drop.addEventListener('click', () => input.click());
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('dragover'); addFiles(e.dataTransfer.files); });
+  input.addEventListener('change', (e) => { addFiles(e.target.files); input.value = ''; });
+  addMore.addEventListener('click', () => input.click());
+
+  btn.addEventListener('click', async () => {
+    if (files.length < 2) return;
+    btn.disabled = true;
+    progressWrap.classList.add('show');
+    progressFill.style.width = '0%';
+    try {
+      const merged = await PDFDocument.create();
+      for (let i = 0; i < files.length; i++){
+        progressLabel.innerHTML = `<span class="spin">⚙️</span> Uniendo ${i + 1} de ${files.length}…`;
+        progressFill.style.width = Math.round((i / files.length) * 100) + '%';
+        const bytes = await files[i].arrayBuffer();
+        const src = await PDFDocument.load(bytes);
+        const pages = await merged.copyPages(src, src.getPageIndices());
+        pages.forEach(p => merged.addPage(p));
+      }
+      const bytes = await merged.save();
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      download.href = url;
+      resultMeta.textContent = `${files.length} PDFs unidos · ${merged.getPageCount()} páginas · ${fmtBytes(blob.size)}`;
+      progressFill.style.width = '100%';
+      resultCard.classList.add('show');
+      resultCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (err) {
+      console.error(err);
+      showToast('Ocurrió un error al unir los PDFs: ' + (err?.message || err));
+    } finally {
+      btn.disabled = false;
+      setTimeout(() => progressWrap.classList.remove('show'), 800);
+    }
+  });
+
+  resetBtn.addEventListener('click', () => { files = []; render(); });
+  render();
+})();
+
+// ---- DIVIDIR PDF ----
+(function(){
+  const drop = document.getElementById('splitDrop');
+  const input = document.getElementById('splitInput');
+  const chip = document.getElementById('splitChip');
+  const fname = document.getElementById('splitFileName');
+  const change = document.getElementById('splitChange');
+  const actionCard = document.getElementById('splitActionCard');
+  const btn = document.getElementById('splitBtn');
+  const progressWrap = document.getElementById('splitProgressWrap');
+  const progressFill = document.getElementById('splitProgressFill');
+  const progressLabel = document.getElementById('splitProgressLabel');
+  const resultCard = document.getElementById('splitResultCard');
+  const resultMeta = document.getElementById('splitResultMeta');
+  const grid = document.getElementById('splitGrid');
+
+  let currentFile = null;
+
+  function handleFile(file){
+    if (!file || file.type !== 'application/pdf'){
+      showToast('Por favor elige un archivo PDF válido.');
+      return;
+    }
+    currentFile = file;
+    fname.textContent = file.name;
+    chip.classList.add('show');
+    actionCard.classList.remove('hidden');
+    resultCard.classList.remove('show');
+  }
+
+  drop.addEventListener('click', () => input.click());
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+  input.addEventListener('change', (e) => handleFile(e.target.files[0]));
+  change.addEventListener('click', (e) => { e.stopPropagation(); input.click(); });
+
+  btn.addEventListener('click', async () => {
+    if (!currentFile) return;
+    btn.disabled = true;
+    progressWrap.classList.add('show');
+    progressFill.style.width = '0%';
+    grid.innerHTML = '';
+    try {
+      const bytes = await currentFile.arrayBuffer();
+      const src = await PDFDocument.load(bytes);
+      const total = src.getPageCount();
+      const baseName = currentFile.name.replace(/\.pdf$/i, '') || 'documento';
+
+      const pdfForThumbs = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+
+      for (let i = 0; i < total; i++){
+        progressLabel.innerHTML = `<span class="spin">⚙️</span> Página ${i + 1} de ${total}…`;
+        progressFill.style.width = Math.round((i / total) * 100) + '%';
+
+        const single = await PDFDocument.create();
+        const [copied] = await single.copyPages(src, [i]);
+        single.addPage(copied);
+        const singleBytes = await single.save();
+        const blob = new Blob([singleBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+
+        const page = await pdfForThumbs.getPage(i + 1);
+        const viewport = page.getViewport({ scale: 0.5 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const thumbUrl = canvas.toDataURL('image/png');
+
+        const item = document.createElement('div');
+        item.className = 'page-item';
+        item.innerHTML = `
+          <img src="${thumbUrl}" alt="Página ${i + 1}">
+          <div class="page-foot">
+            <span>Pág. ${i + 1}</span>
+            <a href="${url}" download="${baseName}-pagina-${i + 1}.pdf">⬇ Descargar</a>
+          </div>
+        `;
+        grid.appendChild(item);
+      }
+
+      progressFill.style.width = '100%';
+      resultMeta.textContent = `${total} página${total === 1 ? '' : 's'} · descarga cada una por separado`;
+      resultCard.classList.add('show');
+      resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      console.error(err);
+      showToast('Ocurrió un error al dividir el PDF: ' + (err?.message || err));
+    } finally {
+      btn.disabled = false;
+      setTimeout(() => progressWrap.classList.remove('show'), 800);
+    }
+  });
+
+  document.getElementById('splitResetBtn').addEventListener('click', () => {
+    currentFile = null;
+    input.value = '';
+    chip.classList.remove('show');
+    actionCard.classList.add('hidden');
+    resultCard.classList.remove('show');
+    grid.innerHTML = '';
+  });
+})();
+
+// ---- IMAGENES A PDF ----
+(function(){
+  const drop = document.getElementById('imgDrop');
+  const input = document.getElementById('imgInput');
+  const list = document.getElementById('imgList');
+  const addMore = document.getElementById('imgAddMore');
+  const actionCard = document.getElementById('imgActionCard');
+  const btn = document.getElementById('imgBtn');
+  const progressWrap = document.getElementById('imgProgressWrap');
+  const progressFill = document.getElementById('imgProgressFill');
+  const progressLabel = document.getElementById('imgProgressLabel');
+  const resultCard = document.getElementById('imgResultCard');
+  const resultMeta = document.getElementById('imgResultMeta');
+  const download = document.getElementById('imgDownload');
+
+  let files = [];
+
+  function render(){
+    list.innerHTML = '';
+    files.forEach((f, i) => {
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      row.innerHTML = `
+        <span class="idx">${i + 1}</span>
+        <span class="fname">${f.name}</span>
+        <button class="mv" data-dir="-1" data-i="${i}" title="Subir">↑</button>
+        <button class="mv" data-dir="1" data-i="${i}" title="Bajar">↓</button>
+        <button class="rm" data-i="${i}" title="Quitar">✕</button>
+      `;
+      list.appendChild(row);
+    });
+    addMore.classList.toggle('hidden', files.length === 0);
+    actionCard.classList.toggle('hidden', files.length === 0);
+    resultCard.classList.remove('show');
+    if (files.length === 0) drop.classList.remove('hidden'); else drop.classList.add('hidden');
+  }
+
+  list.addEventListener('click', (e) => {
+    const i = parseInt(e.target.dataset.i, 10);
+    if (Number.isNaN(i)) return;
+    if (e.target.classList.contains('rm')){
+      files.splice(i, 1);
+    } else if (e.target.classList.contains('mv')){
+      const dir = parseInt(e.target.dataset.dir, 10);
+      const j = i + dir;
+      if (j < 0 || j >= files.length) return;
+      [files[i], files[j]] = [files[j], files[i]];
+    }
+    render();
+  });
+
+  function addFiles(fileListLike){
+    const newOnes = Array.from(fileListLike).filter(f => f.type.startsWith('image/'));
+    if (newOnes.length === 0){
+      showToast('Por favor elige archivos de imagen válidos.');
+      return;
+    }
+    files = files.concat(newOnes);
+    render();
+  }
+
+  drop.addEventListener('click', () => input.click());
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('dragover'); addFiles(e.dataTransfer.files); });
+  input.addEventListener('change', (e) => { addFiles(e.target.files); input.value = ''; });
+  addMore.addEventListener('click', () => input.click());
+
+  function loadImage(file){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  async function toPngBytes(img){
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  btn.addEventListener('click', async () => {
+    if (files.length === 0) return;
+    btn.disabled = true;
+    progressWrap.classList.add('show');
+    progressFill.style.width = '0%';
+    try {
+      const pdfDoc = await PDFDocument.create();
+      for (let i = 0; i < files.length; i++){
+        progressLabel.innerHTML = `<span class="spin">⚙️</span> Imagen ${i + 1} de ${files.length}…`;
+        progressFill.style.width = Math.round((i / files.length) * 100) + '%';
+
+        const file = files[i];
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let embedded;
+        if (file.type === 'image/jpeg' || file.type === 'image/jpg'){
+          embedded = await pdfDoc.embedJpg(bytes);
+        } else if (file.type === 'image/png'){
+          embedded = await pdfDoc.embedPng(bytes);
+        } else {
+          const img = await loadImage(file);
+          const pngBytes = await toPngBytes(img);
+          embedded = await pdfDoc.embedPng(pngBytes);
+        }
+        const page = pdfDoc.addPage([embedded.width, embedded.height]);
+        page.drawImage(embedded, { x: 0, y: 0, width: embedded.width, height: embedded.height });
+      }
+      const bytes = await pdfDoc.save();
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      download.href = url;
+      resultMeta.textContent = `${files.length} imagen${files.length === 1 ? '' : 'es'} · ${fmtBytes(blob.size)}`;
+      progressFill.style.width = '100%';
+      resultCard.classList.add('show');
+      resultCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (err) {
+      console.error(err);
+      showToast('Ocurrió un error al crear el PDF: ' + (err?.message || err));
+    } finally {
+      btn.disabled = false;
+      setTimeout(() => progressWrap.classList.remove('show'), 800);
+    }
+  });
+
+  document.getElementById('imgResetBtn').addEventListener('click', () => { files = []; render(); });
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0d13">
+<title>PDF a JPG/PNG</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖼️</text></svg>">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .page-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));
+    gap:12px;
+    margin-top:16px;
+  }
+  .page-item{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .page-item img{
+    width:100%;
+    display:block;
+    background:#fff;
+  }
+  .page-item .page-foot{
+    padding:8px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:6px;
+    font-size:11.5px;
+    color:var(--muted);
+  }
+  .page-item a{
+    color:var(--accent-2);
+    text-decoration:none;
+    font-weight:700;
+  }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="wrap wide">
+  <a class="back-link" href="../index.html">← Todas las herramientas</a>
+  <header>
+    <div class="logo-badge">🖼️</div>
+    <h1>PDF → JPG/PNG</h1>
+    <p>Convierte cada página de un PDF en una imagen. Nada se sube a ningún servidor.</p>
+  </header>
+
+  <div class="steps">
+    <div class="step" id="step1"><span class="num">1</span><span class="label">Subir</span></div>
+    <div class="step" id="step2"><span class="num">2</span><span class="label">Ajustar</span></div>
+    <div class="step" id="step3"><span class="num">3</span><span class="label">Descargar</span></div>
+  </div>
+
+  <div class="card" id="uploadCard">
+    <div class="drop" id="drop">
+      <div class="icon">📄</div>
+      <div class="main">Arrastra un PDF aquí o haz clic para elegir</div>
+      <div class="sub">Se procesa 100% en tu navegador</div>
+      <input type="file" id="fileInput" accept="application/pdf">
+    </div>
+    <div class="file-chip" id="fileChip">
+      <span>📄</span>
+      <span class="name" id="fileName"></span>
+      <span class="change" id="fileChange">Cambiar</span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="optionsCard">
+    <div class="grid">
+      <div class="field">
+        <label>Formato</label>
+        <select id="formatSelect">
+          <option value="image/png">PNG (mejor calidad)</option>
+          <option value="image/jpeg">JPG (más liviano)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Resolución <span class="value" id="scaleVal">2x</span></label>
+        <input type="range" id="scaleRange" min="1" max="4" step="0.5" value="2">
+      </div>
+    </div>
+
+    <button class="primary" id="convertBtn">✨ Convertir páginas</button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel"><span class="spin">⏳</span> Procesando…</div>
+    </div>
+  </div>
+
+  <div class="card result" id="resultCard">
+    <div class="result-badge">✓ Listo</div>
+    <div class="meta" id="resultMeta"></div>
+    <div class="page-grid" id="pageGrid"></div>
+    <div class="result-actions" style="margin-top:16px;">
+      <button class="ghost" id="resetBtn">↻ Otro PDF</button>
+    </div>
+  </div>
+
+  <div class="footer-note">La conversión ocurre 100% en tu navegador. PDFs largos pueden tardar más.</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../vendor/pdfjs/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.min.js', document.baseURI).href;
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const fileChip = document.getElementById('fileChip');
+const fileName = document.getElementById('fileName');
+const fileChange = document.getElementById('fileChange');
+const optionsCard = document.getElementById('optionsCard');
+const formatSelect = document.getElementById('formatSelect');
+const scaleRange = document.getElementById('scaleRange');
+const scaleVal = document.getElementById('scaleVal');
+const convertBtn = document.getElementById('convertBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const toast = document.getElementById('toast');
+const resultCard = document.getElementById('resultCard');
+const resultMeta = document.getElementById('resultMeta');
+const pageGrid = document.getElementById('pageGrid');
+const resetBtn = document.getElementById('resetBtn');
+const step1 = document.getElementById('step1');
+const step2 = document.getElementById('step2');
+const step3 = document.getElementById('step3');
+
+let currentFile = null;
+let toastTimer = null;
+
+function setStep(n){
+  [step1, step2, step3].forEach((el, i) => {
+    el.classList.toggle('done', i + 1 < n);
+    el.classList.toggle('active', i + 1 === n);
+  });
+}
+setStep(1);
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 4200);
+}
+
+function handleFile(file){
+  if (!file || file.type !== 'application/pdf'){
+    showToast('Por favor elige un archivo PDF válido.');
+    return;
+  }
+  currentFile = file;
+  fileName.textContent = file.name;
+  fileChip.classList.add('show');
+  optionsCard.classList.remove('hidden');
+  resultCard.classList.remove('show');
+  setStep(2);
+  optionsCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drop.classList.remove('dragover');
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+fileChange.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+scaleRange.addEventListener('input', () => scaleVal.textContent = scaleRange.value + 'x');
+
+convertBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  resultCard.classList.remove('show');
+  convertBtn.disabled = true;
+  progressWrap.classList.add('show');
+  progressFill.style.width = '0%';
+  progressLabel.innerHTML = '<span class="spin">⏳</span> Cargando PDF…';
+  pageGrid.innerHTML = '';
+
+  try {
+    const format = formatSelect.value;
+    const ext = format === 'image/png' ? 'png' : 'jpg';
+    const scale = parseFloat(scaleRange.value);
+    const baseName = currentFile.name.replace(/\.pdf$/i, '') || 'documento';
+
+    const arrayBuffer = await currentFile.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const total = pdf.numPages;
+
+    for (let i = 1; i <= total; i++){
+      progressLabel.innerHTML = `<span class="spin">⚙️</span> Renderizando página ${i} de ${total}…`;
+      progressFill.style.width = Math.round(((i - 1) / total) * 100) + '%';
+
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      if (format === 'image/jpeg'){
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, format, 0.92));
+      const url = URL.createObjectURL(blob);
+
+      const item = document.createElement('div');
+      item.className = 'page-item';
+      item.innerHTML = `
+        <img src="${url}" alt="Página ${i}">
+        <div class="page-foot">
+          <span>Pág. ${i}</span>
+          <a href="${url}" download="${baseName}-pagina-${i}.${ext}">⬇ Descargar</a>
+        </div>
+      `;
+      pageGrid.appendChild(item);
+    }
+
+    progressFill.style.width = '100%';
+    resultMeta.textContent = `${total} página${total === 1 ? '' : 's'} convertidas · formato ${ext.toUpperCase()}`;
+    resultCard.classList.add('show');
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    progressLabel.textContent = '¡Listo!';
+    setStep(3);
+  } catch (err) {
+    console.error(err);
+    showToast('Ocurrió un error al procesar el PDF: ' + (err?.message || err));
+  } finally {
+    convertBtn.disabled = false;
+    setTimeout(() => progressWrap.classList.remove('show'), 800);
+  }
+});
+
+resetBtn.addEventListener('click', () => {
+  currentFile = null;
+  fileInput.value = '';
+  fileChip.classList.remove('show');
+  optionsCard.classList.add('hidden');
+  resultCard.classList.remove('show');
+  pageGrid.innerHTML = '';
+  setStep(1);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+</script>
+</body>
+</html>

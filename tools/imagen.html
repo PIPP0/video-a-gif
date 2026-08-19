@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0d13">
+<title>Herramientas de imagen</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎨</text></svg>">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  img.preview-img{
+    width:100%;
+    max-height:340px;
+    object-fit:contain;
+    border-radius:12px;
+    margin-top:16px;
+    background:repeating-conic-gradient(#20232c 0% 25%, #171a21 0% 50%) 50% / 20px 20px;
+  }
+  .compare{
+    display:flex;
+    gap:14px;
+    justify-content:center;
+    margin:14px 0 18px;
+    flex-wrap:wrap;
+  }
+  .compare .box{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:10px 16px;
+    text-align:center;
+    min-width:120px;
+  }
+  .compare .box .n{ font-size:18px; font-weight:800; }
+  .compare .box .l{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .compare .arrow{ display:flex; align-items:center; font-size:20px; color:var(--muted); }
+  .saved{ color:var(--ok) !important; }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="wrap">
+  <a class="back-link" href="../index.html">← Todas las herramientas</a>
+  <header>
+    <div class="logo-badge">🎨</div>
+    <h1>Herramientas de imagen</h1>
+    <p>Comprime, redimensiona o convierte el formato de tus imágenes.</p>
+  </header>
+
+  <div class="steps">
+    <div class="step" id="step1"><span class="num">1</span><span class="label">Subir</span></div>
+    <div class="step" id="step2"><span class="num">2</span><span class="label">Ajustar</span></div>
+    <div class="step" id="step3"><span class="num">3</span><span class="label">Descargar</span></div>
+  </div>
+
+  <div class="card" id="uploadCard">
+    <div class="drop" id="drop">
+      <div class="icon">🖼️</div>
+      <div class="main">Arrastra una imagen aquí o haz clic para elegir</div>
+      <div class="sub">PNG, JPG, WebP…</div>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+    <div class="file-chip" id="fileChip">
+      <span>🖼️</span>
+      <span class="name" id="fileName"></span>
+      <span class="change" id="fileChange">Cambiar</span>
+    </div>
+    <img id="preview" class="preview-img hidden" alt="Vista previa">
+  </div>
+
+  <div class="card hidden" id="optionsCard">
+    <div class="grid">
+      <div class="field">
+        <label>Formato de salida</label>
+        <select id="formatSelect">
+          <option value="image/jpeg">JPG</option>
+          <option value="image/png">PNG</option>
+          <option value="image/webp">WebP</option>
+        </select>
+      </div>
+      <div class="field" id="qualityField">
+        <label>Calidad <span class="value" id="qualityVal">80%</span></label>
+        <input type="range" id="qualityRange" min="10" max="100" step="5" value="80">
+      </div>
+    </div>
+    <div class="field" style="margin-top:16px;">
+      <label>Ancho máximo <span class="value" id="widthVal">Original</span></label>
+      <input type="range" id="widthRange" min="0" max="4000" step="20" value="0">
+    </div>
+
+    <button class="primary" id="convertBtn">✨ Procesar imagen</button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel"><span class="spin">⏳</span> Procesando…</div>
+    </div>
+  </div>
+
+  <div class="card result" id="resultCard">
+    <div class="result-badge">✓ Listo</div>
+    <img id="resultImg" class="preview-img" alt="Resultado">
+    <div class="compare">
+      <div class="box"><div class="n" id="sizeBefore">-</div><div class="l">Antes</div></div>
+      <div class="arrow">→</div>
+      <div class="box"><div class="n saved" id="sizeAfter">-</div><div class="l">Después</div></div>
+      <div class="box"><div class="n saved" id="sizeSaved">-</div><div class="l">Ahorro</div></div>
+    </div>
+    <div class="result-actions">
+      <a class="download" id="downloadLink" download="imagen.jpg">⬇ Descargar</a>
+      <button class="ghost" id="resetBtn">↻ Otra imagen</button>
+    </div>
+  </div>
+
+  <div class="footer-note">El procesamiento ocurre 100% en tu navegador.</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const fileChip = document.getElementById('fileChip');
+const fileName = document.getElementById('fileName');
+const fileChange = document.getElementById('fileChange');
+const preview = document.getElementById('preview');
+const optionsCard = document.getElementById('optionsCard');
+const formatSelect = document.getElementById('formatSelect');
+const qualityField = document.getElementById('qualityField');
+const qualityRange = document.getElementById('qualityRange');
+const qualityVal = document.getElementById('qualityVal');
+const widthRange = document.getElementById('widthRange');
+const widthVal = document.getElementById('widthVal');
+const convertBtn = document.getElementById('convertBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const toast = document.getElementById('toast');
+const resultCard = document.getElementById('resultCard');
+const resultImg = document.getElementById('resultImg');
+const sizeBefore = document.getElementById('sizeBefore');
+const sizeAfter = document.getElementById('sizeAfter');
+const sizeSaved = document.getElementById('sizeSaved');
+const downloadLink = document.getElementById('downloadLink');
+const resetBtn = document.getElementById('resetBtn');
+const step1 = document.getElementById('step1');
+const step2 = document.getElementById('step2');
+const step3 = document.getElementById('step3');
+
+let currentFile = null;
+let currentImg = null;
+let toastTimer = null;
+
+function setStep(n){
+  [step1, step2, step3].forEach((el, i) => {
+    el.classList.toggle('done', i + 1 < n);
+    el.classList.toggle('active', i + 1 === n);
+  });
+}
+setStep(1);
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 4200);
+}
+
+function fmtBytes(n){
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(2) + ' MB';
+}
+
+function handleFile(file){
+  if (!file || !file.type.startsWith('image/')){
+    showToast('Por favor elige un archivo de imagen válido.');
+    return;
+  }
+  currentFile = file;
+  const url = URL.createObjectURL(file);
+  preview.src = url;
+  preview.classList.remove('hidden');
+  fileName.textContent = file.name;
+  fileChip.classList.add('show');
+
+  const img = new Image();
+  img.onload = () => {
+    currentImg = img;
+    widthRange.max = Math.max(img.naturalWidth, 4000);
+    widthRange.value = 0;
+    widthVal.textContent = 'Original';
+    optionsCard.classList.remove('hidden');
+    resultCard.classList.remove('show');
+    setStep(2);
+    optionsCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  img.src = url;
+}
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drop.classList.remove('dragover');
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+fileChange.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+
+formatSelect.addEventListener('change', () => {
+  qualityField.classList.toggle('hidden', formatSelect.value === 'image/png');
+});
+qualityRange.addEventListener('input', () => qualityVal.textContent = qualityRange.value + '%');
+widthRange.addEventListener('input', () => {
+  widthVal.textContent = widthRange.value == 0 ? 'Original' : widthRange.value + 'px';
+});
+
+convertBtn.addEventListener('click', async () => {
+  if (!currentFile || !currentImg) return;
+  resultCard.classList.remove('show');
+  convertBtn.disabled = true;
+  progressWrap.classList.add('show');
+  progressFill.style.width = '30%';
+  progressLabel.innerHTML = '<span class="spin">⚙️</span> Procesando…';
+
+  try {
+    const format = formatSelect.value;
+    const ext = format === 'image/png' ? 'png' : (format === 'image/webp' ? 'webp' : 'jpg');
+    const quality = parseInt(qualityRange.value, 10) / 100;
+    const maxWidth = parseInt(widthRange.value, 10);
+
+    let targetW = currentImg.naturalWidth;
+    let targetH = currentImg.naturalHeight;
+    if (maxWidth > 0 && maxWidth < targetW){
+      const ratio = maxWidth / targetW;
+      targetW = Math.round(targetW * ratio);
+      targetH = Math.round(targetH * ratio);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (format === 'image/jpeg'){
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, targetW, targetH);
+    }
+    ctx.drawImage(currentImg, 0, 0, targetW, targetH);
+
+    progressFill.style.width = '70%';
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, format, quality));
+    const url = URL.createObjectURL(blob);
+
+    resultImg.src = url;
+    downloadLink.href = url;
+    const baseName = currentFile.name.replace(/\.[^.]+$/, '') || 'imagen';
+    downloadLink.download = baseName + '.' + ext;
+
+    sizeBefore.textContent = fmtBytes(currentFile.size);
+    sizeAfter.textContent = fmtBytes(blob.size);
+    const diff = currentFile.size - blob.size;
+    const pct = currentFile.size > 0 ? Math.round((diff / currentFile.size) * 100) : 0;
+    sizeSaved.textContent = (diff >= 0 ? '-' : '+') + Math.abs(pct) + '%';
+
+    progressFill.style.width = '100%';
+    resultCard.classList.add('show');
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    progressLabel.textContent = '¡Listo!';
+    setStep(3);
+  } catch (err) {
+    console.error(err);
+    showToast('Ocurrió un error al procesar la imagen: ' + (err?.message || err));
+  } finally {
+    convertBtn.disabled = false;
+    setTimeout(() => progressWrap.classList.remove('show'), 800);
+  }
+});
+
+resetBtn.addEventListener('click', () => {
+  currentFile = null;
+  currentImg = null;
+  fileInput.value = '';
+  preview.src = '';
+  preview.classList.add('hidden');
+  fileChip.classList.remove('show');
+  optionsCard.classList.add('hidden');
+  resultCard.classList.remove('show');
+  setStep(1);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+</script>
+</body>
+</html>
