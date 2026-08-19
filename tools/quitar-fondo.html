@@ -223,6 +223,13 @@ async function ensureModel(onProgress){
 }
 
 async function segmentOnce(session, imgEl){
+  // Tried letterboxing (scale to fit + pad) here to avoid distorting
+  // tall/narrow photos, expecting it to improve mask quality. Measured
+  // it head-to-head against plain stretching on the same test image and
+  // it was clearly worse (opaque pixel count dropped by ~97%, dark-edge
+  // pixels went up ~3x) — this small model appears to have been
+  // exported/tuned around simple stretch-to-square resizing, and the
+  // gray padding throws it off. Reverted to stretching.
   const size = MODEL_SIZE;
   const inCanvas = document.createElement('canvas');
   inCanvas.width = size; inCanvas.height = size;
@@ -321,26 +328,22 @@ convertBtn.addEventListener('click', async () => {
     const corners = [sampleBlock(0, 0), sampleBlock(w - 4, 0), sampleBlock(0, h - 4), sampleBlock(w - 4, h - 4)];
     const bg = [0, 1, 2].map(c => corners.reduce((s, v) => s + v[c], 0) / corners.length);
 
-    // Sharpen the mask edge: push near-0/near-255 alphas to the extremes
-    // so there's a thinner band of semi-transparent pixels to decontaminate.
-    const lo = 90, hi = 200;
-    const sharpen = (a) => {
-      if (a <= lo) return 0;
-      if (a >= hi) return 255;
-      return Math.round(((a - lo) / (hi - lo)) * 255);
-    };
-
-    // Below this alpha, decontamination is too numerically unstable
-    // (dividing by a near-zero alpha amplifies noise into a visible
-    // dark/colored fringe) — treat those pixels as fully transparent
-    // instead of trying to "rescue" a sliver of foreground color.
-    const MIN_RELIABLE_ALPHA = 0.5;
+    // IMPORTANT: do NOT hard-zero mid-confidence pixels here. An earlier
+    // version pushed anything under ~50% mask confidence to fully
+    // transparent to kill a dark edge halo — but on real photos (as
+    // opposed to the flat-color synthetic test images this was tuned on)
+    // the model's confidence across a legitimate part of the subject can
+    // dip into that range too, which deleted entire limbs/torso sections.
+    // Losing real content is a far worse failure than a faint edge tint,
+    // so we keep every pixel the model gives any real weight to and only
+    // clamp the decontamination math to avoid dividing by ~0 (which is
+    // what caused the original dark-fringe artifact).
+    const MIN_DECONTAMINATION_ALPHA = 0.15;
 
     for (let i = 0; i < px.length; i += 4){
-      let a = sharpen(maskData[i]);
+      const a = maskData[i];
       if (a > 0 && a < 255){
-        const af = a / 255;
-        if (af < MIN_RELIABLE_ALPHA){ a = 0; px[i+3] = 0; continue; }
+        const af = Math.max(a / 255, MIN_DECONTAMINATION_ALPHA);
         px[i]     = Math.min(255, Math.max(0, (px[i]     - (1 - af) * bg[0]) / af));
         px[i + 1] = Math.min(255, Math.max(0, (px[i + 1] - (1 - af) * bg[1]) / af));
         px[i + 2] = Math.min(255, Math.max(0, (px[i + 2] - (1 - af) * bg[2]) / af));
