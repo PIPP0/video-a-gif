@@ -496,7 +496,7 @@ function downloadBlob(blob, filename){
 // motor real de LibreOffice). Se reemplaza por la URL real tras desplegar
 // worker/ (ver worker/README.md). Mientras diga "REPLACE_", convertViaWorker
 // falla enseguida y se usa directo el conversor local de abajo.
-const WORKER_URL = 'https://REPLACE_WITH_DEPLOYED_WORKER_URL.workers.dev/convert';
+const WORKER_URL = 'https://word-a-pdf-worker.futuroiadesarrollo.workers.dev/convert';
 
 async function convertViaWorker(){
   const res = await fetch(WORKER_URL, {

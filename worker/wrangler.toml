@@ -7,8 +7,6 @@ ALLOWED_ORIGIN = "https://pipp0.github.io"
 FREE_DAILY_LIMIT = "20"
 MAX_UPLOAD_BYTES = "26214400"
 
-# Creado con: wrangler kv namespace create QUOTA_KV
-# Reemplazar el id de abajo con el que devuelva ese comando.
 [[kv_namespaces]]
 binding = "QUOTA_KV"
-id = "REPLACE_WITH_REAL_KV_NAMESPACE_ID"
+id = "f6ea75d6c0d6436d81bd9ab89344a100"
