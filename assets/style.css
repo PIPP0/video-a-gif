@@ -1028,6 +1028,11 @@ button.ghost:hover{ background:var(--panel-2); }
   opacity:1;
   transform:translate(-50%, 0);
 }
+.toast.success{
+  background:#122a1c;
+  border:1px solid #1f4a30;
+  color:var(--ok);
+}
 
 .confetti-canvas{
   position:fixed;

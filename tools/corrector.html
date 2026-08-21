@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/style.css?v=9">
+<link rel="stylesheet" href="../assets/style.css?v=10">
 <style>
   textarea#textInput{
     width:100%;
@@ -227,8 +227,9 @@ const toast = document.getElementById('toast');
 let dict = null;
 let toastTimer = null;
 
-function showToast(msg){
+function showToast(msg, type){
   toast.textContent = msg;
+  toast.classList.toggle('success', type === 'success');
   toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 4200);
@@ -409,7 +410,7 @@ document.addEventListener('click', (e) => {
 copyBtn.addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(resultText.innerText);
-    showToast('Texto copiado al portapapeles.');
+    showToast('Texto copiado al portapapeles.', 'success');
   } catch (err) {
     showToast('No se pudo copiar automáticamente. Selecciona el texto y copia manualmente.');
   }
