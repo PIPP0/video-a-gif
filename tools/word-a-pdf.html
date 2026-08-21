@@ -151,6 +151,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="../vendor/jszip.min.js"></script>
 <script src="../vendor/mammoth/mammoth.browser.min.js"></script>
 <script src="../vendor/html2pdf/html2pdf.bundle.min.js"></script>
 <script src="../vendor/pdflib/pdf-lib.min.js"></script>
@@ -220,6 +221,78 @@ function showToast(msg){
   toastTimer = setTimeout(() => toast.classList.remove('show'), 4200);
 }
 
+// Word guarda el recorte de imagen (herramienta "Recortar") como un
+// rectángulo <a:srcRect> dentro de la propia imagen, no como un cambio real
+// al archivo de la foto — mammoth.js extrae la imagen completa sin aplicar
+// ese recorte. Esto lo lee directamente del .docx (que es un .zip) y lo
+// aplica como recorte CSS sobre las imágenes ya insertadas por mammoth.
+async function getImageCrops(arrayBuffer){
+  try {
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const docXmlFile = zip.file('word/document.xml');
+    const relsFile = zip.file('word/_rels/document.xml.rels');
+    if (!docXmlFile || !relsFile) return [];
+    const [docXml, relsXml] = await Promise.all([docXmlFile.async('text'), relsFile.async('text')]);
+
+    const relMap = {};
+    for (const m of relsXml.matchAll(/<Relationship\b[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"[^>]*\/>/g)){
+      relMap[m[1]] = m[2];
+    }
+
+    const crops = [];
+    for (const m of docXml.matchAll(/<[\w.:]*blipFill\b[^>]*>([\s\S]*?)<\/[\w.:]*blipFill>/g)){
+      const block = m[1];
+      const embedMatch = block.match(/r:embed="([^"]+)"/);
+      const rectMatch = block.match(/<a:srcRect\b([^/]*)\/>/);
+      if (!embedMatch) continue;
+      let crop = null;
+      if (rectMatch){
+        const attrs = rectMatch[1];
+        const get = (name) => {
+          const am = attrs.match(new RegExp(name + '="(-?\\d+)"'));
+          return am ? parseInt(am[1], 10) / 100000 : 0;
+        };
+        const l = get('l'), t = get('t'), r = get('r'), b = get('b');
+        if (l || t || r || b) crop = { l, t, r, b };
+      }
+      crops.push(crop);
+    }
+    return crops;
+  } catch (err) {
+    console.error('No se pudo leer el recorte de imágenes:', err);
+    return [];
+  }
+}
+
+function applyImageCrops(container, crops){
+  const imgs = container.querySelectorAll('img');
+  imgs.forEach((img, i) => {
+    const crop = crops[i];
+    if (!crop) return;
+    const visW = 1 - crop.l - crop.r;
+    const visH = 1 - crop.t - crop.b;
+    if (visW <= 0 || visH <= 0 || visW >= 0.999 && visH >= 0.999) return;
+
+    const finish = () => {
+      const natW = img.naturalWidth, natH = img.naturalHeight;
+      if (!natW || !natH) return;
+      // padding-top (en vez de aspect-ratio) para que el recorte se vea
+      // igual en html2canvas, que no soporta bien las propiedades CSS
+      // modernas.
+      const boxRatioPct = (visH * natH) / (visW * natW) * 100;
+      const wrap = document.createElement('span');
+      wrap.style.cssText = `display:block; position:relative; overflow:hidden; width:100%; height:0;` +
+        `padding-top:${boxRatioPct.toFixed(4)}%;`;
+      img.style.cssText = `position:absolute; max-width:none; width:${(100 / visW).toFixed(4)}%;` +
+        `left:${(-crop.l / visW * 100).toFixed(4)}%; top:${(-crop.t / visH * 100).toFixed(4)}%;`;
+      img.parentNode.insertBefore(wrap, img);
+      wrap.appendChild(img);
+    };
+    if (img.complete && img.naturalWidth) finish();
+    else img.addEventListener('load', finish, { once: true });
+  });
+}
+
 async function handleFile(file){
   const isDocx = file && (file.name.toLowerCase().endsWith('.docx'));
   if (!file || !isDocx){
@@ -233,8 +306,12 @@ async function handleFile(file){
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const result = await mammoth.convertToHtml({ arrayBuffer });
+    const [result, crops] = await Promise.all([
+      mammoth.convertToHtml({ arrayBuffer }),
+      getImageCrops(arrayBuffer)
+    ]);
     docPreview.innerHTML = result.value || '<p><em>(Documento vacío)</em></p>';
+    if (crops.some(c => c)) applyImageCrops(docPreview, crops);
     spellResults.innerHTML = '';
     previewCard.classList.remove('hidden');
     setStep(2);
