@@ -305,6 +305,8 @@ convertBtn.addEventListener('click', async () => {
   progressFill.style.width = '30%';
   progressLabel.innerHTML = '<span class="spin">⚙️</span> Generando PDF…';
 
+  const prevMaxHeight = docPreview.style.maxHeight;
+  const prevOverflow = docPreview.style.overflow;
   try {
     const baseName = currentFile.name.replace(/\.docx$/i, '') || 'documento';
     const opt = {
@@ -315,6 +317,10 @@ convertBtn.addEventListener('click', async () => {
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     progressFill.style.width = '60%';
+    // El recuadro de vista previa tiene scroll (max-height:480px); quitarlo aquí
+    // para que html2canvas capture el documento completo, no solo lo visible.
+    docPreview.style.maxHeight = 'none';
+    docPreview.style.overflow = 'visible';
     await html2pdf().set(opt).from(docPreview).save();
     progressFill.style.width = '100%';
     resultMeta.textContent = `${baseName}.pdf generado y descargado`;
@@ -327,6 +333,8 @@ convertBtn.addEventListener('click', async () => {
     console.error(err);
     showToast('Ocurrió un error al generar el PDF: ' + (err?.message || err));
   } finally {
+    docPreview.style.maxHeight = prevMaxHeight;
+    docPreview.style.overflow = prevOverflow;
     convertBtn.disabled = false;
     setTimeout(() => progressWrap.classList.remove('show'), 800);
   }
