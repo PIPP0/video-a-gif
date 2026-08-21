@@ -1,0 +1,14 @@
+name = "word-a-pdf-worker"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+ALLOWED_ORIGIN = "https://pipp0.github.io"
+FREE_DAILY_LIMIT = "20"
+MAX_UPLOAD_BYTES = "26214400"
+
+# Creado con: wrangler kv namespace create QUOTA_KV
+# Reemplazar el id de abajo con el que devuelva ese comando.
+[[kv_namespaces]]
+binding = "QUOTA_KV"
+id = "REPLACE_WITH_REAL_KV_NAMESPACE_ID"

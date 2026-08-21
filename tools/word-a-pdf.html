@@ -146,7 +146,7 @@
     </div>
   </div>
 
-  <div class="footer-note">La conversión ocurre 100% en tu navegador.</div>
+  <div class="footer-note">Conversión de alta fidelidad en la nube, con respaldo local en tu navegador si el servicio no está disponible.</div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -482,8 +482,73 @@ spellBtn.addEventListener('click', async () => {
   }
 });
 
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// URL del Worker que hace la conversión de alta fidelidad (CloudConvert +
+// motor real de LibreOffice). Se reemplaza por la URL real tras desplegar
+// worker/ (ver worker/README.md). Mientras diga "REPLACE_", convertViaWorker
+// falla enseguida y se usa directo el conversor local de abajo.
+const WORKER_URL = 'https://REPLACE_WITH_DEPLOYED_WORKER_URL.workers.dev/convert';
+
+async function convertViaWorker(){
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': currentFile.type || 'application/octet-stream',
+      'X-Filename': encodeURIComponent(currentFile.name)
+    },
+    body: currentFile
+  });
+  if (!res.ok){
+    const info = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(info.message || `Error del servidor (${res.status})`), { code: info.error || 'unknown' });
+  }
+  return res.blob();
+}
+
 convertBtn.addEventListener('click', async () => {
   if (!currentFile) return;
+  convertBtn.disabled = true;
+  progressWrap.classList.add('show');
+  progressFill.style.width = '20%';
+  progressLabel.innerHTML = '<span class="spin">☁️</span> Generando PDF (alta fidelidad)…';
+
+  try {
+    const baseName = currentFile.name.replace(/\.docx$/i, '') || 'documento';
+    const pdfBlob = await convertViaWorker();
+    downloadBlob(pdfBlob, baseName + '.pdf');
+
+    progressFill.style.width = '100%';
+    resultMeta.textContent = `${baseName}.pdf generado y descargado (motor de alta fidelidad)`;
+    resultCard.classList.remove('hidden');
+    resultCard.classList.add('show');
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    progressLabel.textContent = '¡Listo!';
+    setStep(3);
+    convertBtn.disabled = false;
+    setTimeout(() => progressWrap.classList.remove('show'), 800);
+  } catch (err) {
+    // Cualquier falla del Worker (red, cuota agotada, CloudConvert caído,
+    // o que WORKER_URL todavía no se haya configurado) cae aquí, y en vez
+    // de dejar al usuario sin PDF, se usa el conversor local de siempre.
+    console.error('Conversión de alta fidelidad falló, usando conversor local:', err);
+    const reason = err?.code === 'quota_exceeded'
+      ? 'Se alcanzó el límite diario gratuito de conversión de alta fidelidad'
+      : 'El servicio de conversión de alta fidelidad no está disponible';
+    showToast(`${reason}; usando el conversor local como respaldo.`);
+    await convertClientSide();
+  }
+});
+
+async function convertClientSide(){
   convertBtn.disabled = true;
   progressWrap.classList.add('show');
   progressFill.style.width = '30%';
@@ -623,13 +688,7 @@ convertBtn.addEventListener('click', async () => {
 
     const finalBytes = await merged.save();
     const finalBlob = new Blob([finalBytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(finalBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = baseName + '.pdf';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    downloadBlob(finalBlob, baseName + '.pdf');
 
     progressFill.style.width = '100%';
     resultMeta.textContent = `${baseName}.pdf generado y descargado · ${merged.getPageCount()} página${merged.getPageCount() === 1 ? '' : 's'}`;
@@ -645,7 +704,7 @@ convertBtn.addEventListener('click', async () => {
     convertBtn.disabled = false;
     setTimeout(() => progressWrap.classList.remove('show'), 800);
   }
-});
+}
 
 resetBtn.addEventListener('click', () => {
   currentFile = null;

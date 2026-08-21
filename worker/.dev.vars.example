@@ -1,0 +1,5 @@
+# Copiar este archivo a .dev.vars (que NO se commitea) para probar localmente
+# con `wrangler dev`. Usar primero la clave sandbox de CloudConvert
+# (gratis, ilimitada, pero marca de agua en el PDF) y recién al final
+# canjearla por la clave de producción con `wrangler secret put`.
+CLOUDCONVERT_API_KEY=sandbox_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
