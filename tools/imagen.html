@@ -149,8 +149,8 @@
       </div>
     </div>
     <div class="field" style="margin-top:16px;">
-      <label>Ancho máximo <span class="value" id="widthVal">Original</span></label>
-      <input type="range" id="widthRange" min="0" max="4000" step="20" value="0">
+      <label>Ancho <span class="value" id="widthVal">100% (Original)</span></label>
+      <input type="range" id="widthRange" min="10" max="100" step="5" value="100">
       <div class="field-help">Reduce las dimensiones de la imagen en píxeles. Déjalo en "Original" si no quieres cambiar el tamaño, solo el peso o el formato.</div>
     </div>
 
@@ -253,9 +253,8 @@ function handleFile(file){
   const img = new Image();
   img.onload = () => {
     currentImg = img;
-    widthRange.max = Math.max(img.naturalWidth, 4000);
-    widthRange.value = 0;
-    widthVal.textContent = 'Original';
+    widthRange.value = 100;
+    widthVal.textContent = '100% (Original)';
     optionsCard.classList.remove('hidden');
     resultCard.classList.remove('show');
     setStep(2);
@@ -280,7 +279,15 @@ formatSelect.addEventListener('change', () => {
 });
 qualityRange.addEventListener('input', () => qualityVal.textContent = qualityRange.value + '%');
 widthRange.addEventListener('input', () => {
-  widthVal.textContent = widthRange.value == 0 ? 'Original' : widthRange.value + 'px';
+  const pct = parseInt(widthRange.value, 10);
+  if (pct >= 100){
+    widthVal.textContent = '100% (Original)';
+  } else if (currentImg){
+    const px = Math.round(currentImg.naturalWidth * pct / 100);
+    widthVal.textContent = pct + '% (' + px + 'px)';
+  } else {
+    widthVal.textContent = pct + '%';
+  }
 });
 
 convertBtn.addEventListener('click', async () => {
@@ -295,12 +302,12 @@ convertBtn.addEventListener('click', async () => {
     const format = formatSelect.value;
     const ext = format === 'image/png' ? 'png' : (format === 'image/webp' ? 'webp' : 'jpg');
     const quality = parseInt(qualityRange.value, 10) / 100;
-    const maxWidth = parseInt(widthRange.value, 10);
+    const widthPct = parseInt(widthRange.value, 10);
 
     let targetW = currentImg.naturalWidth;
     let targetH = currentImg.naturalHeight;
-    if (maxWidth > 0 && maxWidth < targetW){
-      const ratio = maxWidth / targetW;
+    if (widthPct < 100){
+      const ratio = widthPct / 100;
       targetW = Math.round(targetW * ratio);
       targetH = Math.round(targetH * ratio);
     }
