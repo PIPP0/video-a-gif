@@ -224,28 +224,24 @@ function showToast(msg){
 
 // Word guarda el recorte de imagen (herramienta "Recortar") como un
 // rectángulo <a:srcRect> dentro de la propia imagen, no como un cambio real
-// al archivo de la foto — mammoth.js extrae la imagen completa sin aplicar
-// ese recorte. Esto lo lee directamente del .docx (que es un .zip) y lo
-// aplica como recorte CSS sobre las imágenes ya insertadas por mammoth.
-async function getImageCrops(arrayBuffer){
+// al archivo de la foto, y guarda el tamaño real con el que se ve la imagen
+// (<wp:extent>, en EMU) separado de la resolución nativa del archivo —
+// mammoth.js extrae la imagen completa, ignorando ambos datos. Esto lee
+// esa info directamente del .docx (que es un .zip) para poder aplicarla
+// como CSS sobre las imágenes ya insertadas por mammoth.
+async function getImageLayout(arrayBuffer){
   try {
     const zip = await JSZip.loadAsync(arrayBuffer);
     const docXmlFile = zip.file('word/document.xml');
-    const relsFile = zip.file('word/_rels/document.xml.rels');
-    if (!docXmlFile || !relsFile) return [];
-    const [docXml, relsXml] = await Promise.all([docXmlFile.async('text'), relsFile.async('text')]);
+    if (!docXmlFile) return [];
+    const docXml = await docXmlFile.async('text');
 
-    const relMap = {};
-    for (const m of relsXml.matchAll(/<Relationship\b[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"[^>]*\/>/g)){
-      relMap[m[1]] = m[2];
-    }
-
-    const crops = [];
-    for (const m of docXml.matchAll(/<[\w.:]*blipFill\b[^>]*>([\s\S]*?)<\/[\w.:]*blipFill>/g)){
+    const layouts = [];
+    for (const m of docXml.matchAll(/<w:drawing>([\s\S]*?)<\/w:drawing>/g)){
       const block = m[1];
       const embedMatch = block.match(/r:embed="([^"]+)"/);
-      const rectMatch = block.match(/<a:srcRect\b([^/]*)\/>/);
       if (!embedMatch) continue;
+      const rectMatch = block.match(/<a:srcRect\b([^/]*)\/>/);
       let crop = null;
       if (rectMatch){
         const attrs = rectMatch[1];
@@ -256,11 +252,17 @@ async function getImageCrops(arrayBuffer){
         const l = get('l'), t = get('t'), r = get('r'), b = get('b');
         if (l || t || r || b) crop = { l, t, r, b };
       }
-      crops.push(crop);
+      const extentMatch = block.match(/<wp:extent\b([^/]*)\/>/);
+      let widthMM = null;
+      if (extentMatch){
+        const cxMatch = extentMatch[1].match(/cx="(\d+)"/);
+        if (cxMatch) widthMM = parseInt(cxMatch[1], 10) / 914400 * 25.4;
+      }
+      layouts.push({ crop, widthMM });
     }
-    return crops;
+    return layouts;
   } catch (err) {
-    console.error('No se pudo leer el recorte de imágenes:', err);
+    console.error('No se pudo leer el tamaño/recorte de imágenes:', err);
     return [];
   }
 }
@@ -317,29 +319,51 @@ async function getPageSetup(arrayBuffer){
   }
 }
 
-function applyImageCrops(container, crops){
+function applyImageLayout(container, layouts, innerWidthMM){
   const imgs = container.querySelectorAll('img');
   imgs.forEach((img, i) => {
-    const crop = crops[i];
-    if (!crop) return;
-    const visW = 1 - crop.l - crop.r;
-    const visH = 1 - crop.t - crop.b;
-    if (visW <= 0 || visH <= 0 || visW >= 0.999 && visH >= 0.999) return;
+    const info = layouts[i];
+    const crop = info && info.crop;
+    const visW = crop ? 1 - crop.l - crop.r : 1;
+    const visH = crop ? 1 - crop.t - crop.b : 1;
+    const hasCrop = !!crop && visW > 0 && visH > 0 && !(visW >= 0.999 && visH >= 0.999);
+
+    // El ancho con que Word muestra la imagen (wp:extent) puede ser menor
+    // al ancho de la columna de texto — mammoth la mete siempre a tamaño
+    // natural (recortado solo por max-width:100%), así que sale más grande
+    // de lo que se ve en Word. Si sale MÁS ancha que la columna (una imagen
+    // que Word deja sobresalir del margen) se deja acotada al 100%: replicar
+    // ese "sangrado" exacto es un caso mucho más complejo que no se cubre.
+    let widthPct = null;
+    if (info && info.widthMM && innerWidthMM){
+      widthPct = Math.min(100, (info.widthMM / innerWidthMM) * 100);
+    }
 
     const finish = () => {
       const natW = img.naturalWidth, natH = img.naturalHeight;
       if (!natW || !natH) return;
-      // padding-top (en vez de aspect-ratio) para que el recorte se vea
-      // igual en html2canvas, que no soporta bien las propiedades CSS
-      // modernas.
-      const boxRatioPct = (visH * natH) / (visW * natW) * 100;
-      const wrap = document.createElement('span');
-      wrap.style.cssText = `display:block; position:relative; overflow:hidden; width:100%; height:0;` +
-        `padding-top:${boxRatioPct.toFixed(4)}%;`;
-      img.style.cssText = `position:absolute; max-width:none; width:${(100 / visW).toFixed(4)}%;` +
-        `left:${(-crop.l / visW * 100).toFixed(4)}%; top:${(-crop.t / visH * 100).toFixed(4)}%;`;
-      img.parentNode.insertBefore(wrap, img);
-      wrap.appendChild(img);
+
+      let target = img;
+      if (hasCrop){
+        // padding-top (en vez de aspect-ratio) para que el recorte se vea
+        // igual en html2canvas, que no soporta bien las propiedades CSS
+        // modernas.
+        const boxRatioPct = (visH * natH) / (visW * natW) * 100;
+        const wrap = document.createElement('span');
+        wrap.style.cssText = `display:block; position:relative; overflow:hidden; width:100%; height:0;` +
+          `padding-top:${boxRatioPct.toFixed(4)}%;`;
+        img.style.cssText = `position:absolute; max-width:none; width:${(100 / visW).toFixed(4)}%;` +
+          `left:${(-crop.l / visW * 100).toFixed(4)}%; top:${(-crop.t / visH * 100).toFixed(4)}%;`;
+        img.parentNode.insertBefore(wrap, img);
+        wrap.appendChild(img);
+        target = wrap;
+      }
+      if (widthPct != null && widthPct < 99.5){
+        target.style.width = widthPct.toFixed(4) + '%';
+        target.style.marginLeft = 'auto';
+        target.style.marginRight = 'auto';
+        if (!hasCrop) target.style.display = 'block';
+      }
     };
     if (img.complete && img.naturalWidth) finish();
     else img.addEventListener('load', finish, { once: true });
@@ -359,14 +383,17 @@ async function handleFile(file){
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const [result, crops, pageSetup] = await Promise.all([
+    const [result, layouts, pageSetup] = await Promise.all([
       mammoth.convertToHtml({ arrayBuffer }),
-      getImageCrops(arrayBuffer),
+      getImageLayout(arrayBuffer),
       getPageSetup(arrayBuffer)
     ]);
     docPageSetup = pageSetup;
     docPreview.innerHTML = result.value || '<p><em>(Documento vacío)</em></p>';
-    if (crops.some(c => c)) applyImageCrops(docPreview, crops);
+    if (layouts.length){
+      const innerWidthMM = pageSetup.widthMM - pageSetup.marginLeftMM - pageSetup.marginRightMM;
+      applyImageLayout(docPreview, layouts, innerWidthMM);
+    }
     spellResults.innerHTML = '';
     previewCard.classList.remove('hidden');
     setStep(2);
