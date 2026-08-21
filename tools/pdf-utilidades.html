@@ -588,7 +588,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       const blob = new Blob([bytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       download.href = url;
-      resultMeta.textContent = `${files.length} imagen${files.length === 1 ? '' : 'es'} · ${fmtBytes(blob.size)}`;
+      resultMeta.textContent = `${files.length} ${files.length === 1 ? 'imagen' : 'imágenes'} · ${fmtBytes(blob.size)}`;
       progressFill.style.width = '100%';
       resultCard.classList.add('show');
       resultCard.scrollIntoView({ behavior: 'smooth', block: 'center' });

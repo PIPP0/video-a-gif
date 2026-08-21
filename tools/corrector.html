@@ -70,10 +70,13 @@
     padding:0 1px;
   }
   .err:hover{ background:rgba(255,92,122,0.3); }
-  .err.fixed{
+  .fixed{
     background:rgba(61,220,151,0.16);
     border-bottom:2px solid var(--ok);
+    border-radius:3px;
+    padding:0 1px;
   }
+  .result-text:focus{ outline:none; border-color:var(--accent-2); }
 
   .suggest-pop{
     position:fixed;
@@ -113,7 +116,36 @@
     font-size:12.5px;
     padding:6px 8px;
   }
-
+  .suggest-pop .manual-edit{
+    display:flex;
+    gap:6px;
+    padding:8px 8px 2px;
+    margin-top:4px;
+    border-top:1px solid var(--border);
+  }
+  .suggest-pop .manual-input{
+    flex:1;
+    min-width:0;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:6px;
+    padding:6px 8px;
+    font-size:13px;
+    font-family:inherit;
+  }
+  .suggest-pop .manual-input:focus{ outline:none; border-color:var(--accent-2); }
+  .suggest-pop .manual-apply{
+    background:var(--accent-2);
+    border:none;
+    color:#0b0d13;
+    border-radius:6px;
+    padding:0 10px;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+    width:auto;
+  }
   .toolbar{
     display:flex;
     gap:10px;
@@ -162,7 +194,7 @@
 
   <div class="card result hidden" id="resultCard">
     <div class="summary-badge" id="summaryBadge"></div>
-    <div class="result-text" id="resultText"></div>
+    <div class="result-text" id="resultText" contenteditable="true" spellcheck="false"></div>
     <div class="toolbar">
       <button class="ghost" id="copyBtn">📋 Copiar texto</button>
       <button class="ghost" id="editBtn">✏️ Editar de nuevo</button>
@@ -312,6 +344,10 @@ resultText.addEventListener('click', (e) => {
       html += `<button type="button" data-replacement="${escapeHtml(s)}">${escapeHtml(s)}</button>`;
     });
   }
+  html += `<div class="manual-edit">
+    <input type="text" class="manual-input" value="${escapeHtml(word)}" aria-label="Editar palabra manualmente">
+    <button type="button" class="manual-apply" title="Aplicar">✓</button>
+  </div>`;
   suggestPop.innerHTML = html;
 
   const rect = span.getBoundingClientRect();
@@ -322,18 +358,46 @@ resultText.addEventListener('click', (e) => {
   suggestPop.style.top = (rect.bottom + 6) + 'px';
   suggestPop.classList.add('show');
   suggestPop._targetSpan = span;
+
+  const manualInput = suggestPop.querySelector('.manual-input');
+  manualInput.focus();
+  manualInput.select();
 });
+
+function applyManualEdit(){
+  const span = suggestPop._targetSpan;
+  const input = suggestPop.querySelector('.manual-input');
+  if (!span || !input) return;
+  const value = input.value.trim();
+  if (!value) return;
+  span.textContent = value;
+  span.classList.add('fixed');
+  span.classList.remove('err');
+  suggestPop.classList.remove('show');
+}
 
 suggestPop.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-replacement]');
-  if (!btn) return;
-  const span = suggestPop._targetSpan;
-  if (span){
-    span.textContent = btn.dataset.replacement;
-    span.classList.add('fixed');
-    span.classList.remove('err');
+  if (btn){
+    const span = suggestPop._targetSpan;
+    if (span){
+      span.textContent = btn.dataset.replacement;
+      span.classList.add('fixed');
+      span.classList.remove('err');
+    }
+    suggestPop.classList.remove('show');
+    return;
   }
-  suggestPop.classList.remove('show');
+  if (e.target.closest('.manual-apply')){
+    applyManualEdit();
+  }
+});
+
+suggestPop.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.keyCode === 13) && e.target.classList.contains('manual-input')){
+    e.preventDefault();
+    applyManualEdit();
+  }
 });
 
 document.addEventListener('click', (e) => {

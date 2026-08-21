@@ -248,7 +248,7 @@ convertBtn.addEventListener('click', async () => {
     }
 
     progressFill.style.width = '100%';
-    resultMeta.textContent = `${total} página${total === 1 ? '' : 's'} convertidas · formato ${ext.toUpperCase()}`;
+    resultMeta.textContent = `${total} página${total === 1 ? '' : 's'} convertida${total === 1 ? '' : 's'} · formato ${ext.toUpperCase()}`;
     resultCard.classList.add('show');
     resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     progressLabel.textContent = '¡Listo!';
