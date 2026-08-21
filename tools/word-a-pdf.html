@@ -482,10 +482,55 @@ convertBtn.addEventListener('click', async () => {
     if (current.length) groups.push(current);
     if (groups.length === 0) groups.push([]);
 
+    // Un párrafo con varias imágenes seguidas (por ejemplo, capturas de
+    // pantalla una debajo de otra) puede por sí solo ser mucho más alto que
+    // una página. Como el bucle de arriba nunca separa el contenido DENTRO
+    // de un mismo elemento, ese párrafo quedaba como un grupo de 1 solo
+    // elemento gigante, y html2pdf tenía que partirlo en varias páginas por
+    // su cuenta — ahí es donde aparecían páginas duplicadas o con imágenes
+    // rotas. Si un grupo de un solo elemento es más alto que lo seguro,
+    // se separa aquí por sus propios hijos (cada imagen, en la práctica),
+    // igual que se hizo arriba con los párrafos del documento.
+    function splitTallChild(child, safeHeight){
+      if (child.offsetHeight <= safeHeight) return [[child]];
+      const inner = Array.from(child.children);
+      if (inner.length === 0) return [[child]];
+      const parentTop = child.getBoundingClientRect().top;
+      const subGroups = [];
+      let cur = [];
+      let start = 0;
+      inner.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        const elTop = rect.top - parentTop;
+        const elBottom = elTop + rect.height;
+        if (cur.length > 0 && (elBottom - start) > safeHeight){
+          subGroups.push(cur);
+          cur = [];
+          start = elTop;
+        }
+        if (cur.length === 0) start = elTop;
+        cur.push(el);
+      });
+      if (cur.length) subGroups.push(cur);
+      return subGroups.map(els => {
+        const wrapperEl = child.cloneNode(false);
+        els.forEach(el => wrapperEl.appendChild(el.cloneNode(true)));
+        return [wrapperEl];
+      });
+    }
+    const expandedGroups = [];
+    for (const g of groups){
+      if (g.length === 1 && g[0].offsetHeight > SAFE_HEIGHT){
+        expandedGroups.push(...splitTallChild(g[0], SAFE_HEIGHT));
+      } else {
+        expandedGroups.push(g);
+      }
+    }
+
     const merged = await PDFLib.PDFDocument.create();
-    for (let i = 0; i < groups.length; i++){
-      progressLabel.innerHTML = `<span class="spin">⚙️</span> Generando PDF… (parte ${i + 1} de ${groups.length})`;
-      progressFill.style.width = Math.round(10 + (i / groups.length) * 80) + '%';
+    for (let i = 0; i < expandedGroups.length; i++){
+      progressLabel.innerHTML = `<span class="spin">⚙️</span> Generando PDF… (parte ${i + 1} de ${expandedGroups.length})`;
+      progressFill.style.width = Math.round(10 + (i / expandedGroups.length) * 80) + '%';
 
       const wrapper = document.createElement('div');
       wrapper.className = 'doc-preview';
@@ -499,7 +544,7 @@ convertBtn.addEventListener('click', async () => {
       // duplicaba el espacio y el contenido salía más angosto que en la
       // vista previa real.
       wrapper.style.cssText = 'max-height:none; overflow:visible; padding:0; width:' + contentWidth + 'px;';
-      groups[i].forEach(node => wrapper.appendChild(node.cloneNode(true)));
+      expandedGroups[i].forEach(node => wrapper.appendChild(node.cloneNode(true)));
       document.body.appendChild(wrapper);
 
       // Si la página está scrolleada al capturar, html2canvas desplaza la
