@@ -393,8 +393,13 @@ convertBtn.addEventListener('click', async () => {
     // bug real: deja un espacio en blanco arriba del contenido de la
     // primera página y a veces superpone texto. Evitarla por completo,
     // en vez de intentar corregirla, es lo que da un resultado confiable.
+    // Ancho real del contenido (sin el padding de .doc-preview), porque el
+    // bloque temporal para el PDF no lo usa: ese espacio ya lo pone el
+    // margen de la página.
+    const previewStyle = getComputedStyle(docPreview);
+    const contentWidth = Math.round(docPreview.clientWidth - parseFloat(previewStyle.paddingLeft) - parseFloat(previewStyle.paddingRight));
     const A4_INNER_RATIO = (297 - 24) / (210 - 24); // alto/ancho útil de una A4 con 12mm de margen
-    const SAFE_HEIGHT = Math.max(200, Math.floor(docPreview.clientWidth * A4_INNER_RATIO * 0.85));
+    const SAFE_HEIGHT = Math.max(200, Math.floor(contentWidth * A4_INNER_RATIO * 0.85));
     const children = Array.from(docPreview.children);
     const groups = [];
     let current = [];
@@ -427,7 +432,11 @@ convertBtn.addEventListener('click', async () => {
       // internamente y la captura sale en blanco. Con posición normal en el
       // flujo del documento la captura sale bien; se agrega al final del
       // body y se quita apenas termina de capturarse ese bloque.
-      wrapper.style.cssText = 'max-height:none; overflow:visible; width:' + docPreview.clientWidth + 'px;';
+      // padding:0 porque el margen de la página ya lo pone html2pdf (opción
+      // margin:12 más abajo); dejar también el padding de .doc-preview
+      // duplicaba el espacio y el contenido salía más angosto que en la
+      // vista previa real.
+      wrapper.style.cssText = 'max-height:none; overflow:visible; padding:0; width:' + contentWidth + 'px;';
       groups[i].forEach(node => wrapper.appendChild(node.cloneNode(true)));
       document.body.appendChild(wrapper);
 
