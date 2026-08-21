@@ -179,6 +179,7 @@ const step2 = document.getElementById('step2');
 const step3 = document.getElementById('step3');
 
 let currentFile = null;
+let docPageSetup = null;
 let toastTimer = null;
 let dict = null;
 
@@ -264,6 +265,58 @@ async function getImageCrops(arrayBuffer){
   }
 }
 
+// Lee el tamaño de página y los márgenes reales del .docx (guardados en
+// twips, 1/1440 de pulgada) para que el PDF generado tenga el mismo ancho
+// de contenido que el Word original, en vez de forzar siempre A4 con 12mm
+// de margen — eso hacía que documentos en tamaño Carta (u otros) salieran
+// con un ancho distinto al que se ve en Word.
+async function getPageSetup(arrayBuffer){
+  const fallback = { widthMM: 210, heightMM: 297, marginTopMM: 12, marginRightMM: 12, marginBottomMM: 12, marginLeftMM: 12 };
+  try {
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const docXmlFile = zip.file('word/document.xml');
+    if (!docXmlFile) return fallback;
+    const docXml = await docXmlFile.async('text');
+    const sectPrMatch = docXml.match(/<w:sectPr\b[^>]*>[\s\S]*?<\/w:sectPr>/);
+    if (!sectPrMatch) return fallback;
+    const block = sectPrMatch[0];
+    const pgSzMatch = block.match(/<w:pgSz\b([^/]*)\/>/);
+    const pgMarMatch = block.match(/<w:pgMar\b([^/]*)\/>/);
+    if (!pgSzMatch) return fallback;
+    const twipToMM = (twips) => twips / 1440 * 25.4;
+    const getAttr = (attrs, name) => {
+      const m = attrs.match(new RegExp(name + '="(-?\\d+)"'));
+      return m ? parseInt(m[1], 10) : null;
+    };
+    const w = getAttr(pgSzMatch[1], 'w:w');
+    const h = getAttr(pgSzMatch[1], 'w:h');
+    if (!w || !h) return fallback;
+    const setup = { widthMM: twipToMM(w), heightMM: twipToMM(h) };
+    if (pgMarMatch){
+      const attrs = pgMarMatch[1];
+      const top = getAttr(attrs, 'w:top');
+      const bottom = getAttr(attrs, 'w:bottom');
+      const left = getAttr(attrs, 'w:left');
+      const right = getAttr(attrs, 'w:right');
+      setup.marginTopMM = top != null ? twipToMM(top) : 12;
+      setup.marginBottomMM = bottom != null ? twipToMM(bottom) : 12;
+      setup.marginLeftMM = left != null ? twipToMM(left) : 12;
+      setup.marginRightMM = right != null ? twipToMM(right) : 12;
+    } else {
+      setup.marginTopMM = setup.marginRightMM = setup.marginBottomMM = setup.marginLeftMM = 12;
+    }
+    // Sanidad: si algo sale fuera de rango razonable, usar A4 estándar en
+    // vez de arriesgarse a una página absurda con un documento mal formado.
+    if (setup.widthMM < 50 || setup.widthMM > 1000 || setup.heightMM < 50 || setup.heightMM > 1000) return fallback;
+    const minMargin = Math.min(setup.marginTopMM, setup.marginRightMM, setup.marginBottomMM, setup.marginLeftMM);
+    if (minMargin < 0 || setup.marginLeftMM + setup.marginRightMM >= setup.widthMM || setup.marginTopMM + setup.marginBottomMM >= setup.heightMM) return fallback;
+    return setup;
+  } catch (err) {
+    console.error('No se pudo leer el tamaño de página:', err);
+    return fallback;
+  }
+}
+
 function applyImageCrops(container, crops){
   const imgs = container.querySelectorAll('img');
   imgs.forEach((img, i) => {
@@ -306,10 +359,12 @@ async function handleFile(file){
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const [result, crops] = await Promise.all([
+    const [result, crops, pageSetup] = await Promise.all([
       mammoth.convertToHtml({ arrayBuffer }),
-      getImageCrops(arrayBuffer)
+      getImageCrops(arrayBuffer),
+      getPageSetup(arrayBuffer)
     ]);
+    docPageSetup = pageSetup;
     docPreview.innerHTML = result.value || '<p><em>(Documento vacío)</em></p>';
     if (crops.some(c => c)) applyImageCrops(docPreview, crops);
     spellResults.innerHTML = '';
@@ -398,8 +453,15 @@ convertBtn.addEventListener('click', async () => {
     // margen de la página.
     const previewStyle = getComputedStyle(docPreview);
     const contentWidth = Math.round(docPreview.clientWidth - parseFloat(previewStyle.paddingLeft) - parseFloat(previewStyle.paddingRight));
-    const A4_INNER_RATIO = (297 - 24) / (210 - 24); // alto/ancho útil de una A4 con 12mm de margen
-    const SAFE_HEIGHT = Math.max(200, Math.floor(contentWidth * A4_INNER_RATIO * 0.85));
+    // Tamaño de página real del Word (o A4/12mm si no se pudo leer), para
+    // que el ancho de contenido del PDF coincida con el del documento
+    // original en vez de forzar siempre A4.
+    const pageSetup = docPageSetup || { widthMM: 210, heightMM: 297, marginTopMM: 12, marginRightMM: 12, marginBottomMM: 12, marginLeftMM: 12 };
+    const pdfMargin = [pageSetup.marginTopMM, pageSetup.marginRightMM, pageSetup.marginBottomMM, pageSetup.marginLeftMM];
+    const innerWidthMM = pageSetup.widthMM - pageSetup.marginLeftMM - pageSetup.marginRightMM;
+    const innerHeightMM = pageSetup.heightMM - pageSetup.marginTopMM - pageSetup.marginBottomMM;
+    const PAGE_INNER_RATIO = innerHeightMM / innerWidthMM;
+    const SAFE_HEIGHT = Math.max(200, Math.floor(contentWidth * PAGE_INNER_RATIO * 0.85));
     const children = Array.from(docPreview.children);
     const groups = [];
     let current = [];
@@ -448,10 +510,10 @@ convertBtn.addEventListener('click', async () => {
       let chunkBlob;
       try {
         chunkBlob = await html2pdf().set({
-          margin: 12,
+          margin: pdfMargin,
           image: { type: 'jpeg', quality: 0.95 },
           html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          jsPDF: { unit: 'mm', format: [pageSetup.widthMM, pageSetup.heightMM], orientation: pageSetup.widthMM > pageSetup.heightMM ? 'landscape' : 'portrait' }
         }).from(wrapper).outputPdf('blob');
       } finally {
         wrapper.remove();
