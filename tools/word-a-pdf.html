@@ -310,25 +310,30 @@ convertBtn.addEventListener('click', async () => {
     const baseName = currentFile.name.replace(/\.docx$/i, '') || 'documento';
 
     // Dividir el documento en bloques por sus propios elementos (párrafos,
-    // títulos, tablas...), no por coordenadas de píxeles. Cada bloque se
-    // renderiza por separado con el flujo simple y ya probado de html2pdf
-    // (.from(elemento).outputPdf()), evitando tanto el límite de tamaño de
-    // canvas de los navegadores en documentos largos como el recorte manual
-    // por coordenadas, que dejaba un espacio en blanco arriba del contenido.
-    const SAFE_HEIGHT = 3000;
+    // títulos, tablas...), no por coordenadas de píxeles, y hacer que cada
+    // bloque quepa siempre en UNA sola página. La paginación automática de
+    // html2pdf (cuando una sola captura necesita varias páginas) tiene un
+    // bug real: deja un espacio en blanco arriba del contenido de la
+    // primera página y a veces superpone texto. Evitarla por completo,
+    // en vez de intentar corregirla, es lo que da un resultado confiable.
+    const A4_INNER_RATIO = (297 - 24) / (210 - 24); // alto/ancho útil de una A4 con 12mm de margen
+    const SAFE_HEIGHT = Math.max(200, Math.floor(docPreview.clientWidth * A4_INNER_RATIO * 0.85));
     const children = Array.from(docPreview.children);
     const groups = [];
     let current = [];
-    let currentHeight = 0;
+    let groupStartTop = 0;
     for (const child of children){
-      const h = child.offsetHeight;
-      if (current.length > 0 && currentHeight + h > SAFE_HEIGHT){
+      // offsetTop refleja la posición real ya renderizada (incluye los
+      // márgenes entre párrafos); sumar offsetHeight por separado los
+      // ignora y el bloque terminaba más alto de lo calculado.
+      const childBottom = child.offsetTop + child.offsetHeight;
+      if (current.length > 0 && (childBottom - groupStartTop) > SAFE_HEIGHT){
         groups.push(current);
         current = [];
-        currentHeight = 0;
+        groupStartTop = child.offsetTop;
       }
+      if (current.length === 0) groupStartTop = child.offsetTop;
       current.push(child);
-      currentHeight += h;
     }
     if (current.length) groups.push(current);
     if (groups.length === 0) groups.push([]);
@@ -349,12 +354,17 @@ convertBtn.addEventListener('click', async () => {
       groups[i].forEach(node => wrapper.appendChild(node.cloneNode(true)));
       document.body.appendChild(wrapper);
 
+      // Si la página está scrolleada al capturar, html2canvas desplaza la
+      // captura esa misma distancia y deja un espacio en blanco arriba del
+      // contenido (esto era la causa real del bug). scrollX/scrollY:0 lo
+      // fuerza a capturar siempre desde el origen, sin importar el scroll.
+      window.scrollTo(0, 0);
       let chunkBlob;
       try {
         chunkBlob = await html2pdf().set({
           margin: 12,
           image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true },
+          html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         }).from(wrapper).outputPdf('blob');
       } finally {
