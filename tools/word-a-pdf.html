@@ -146,7 +146,7 @@
     </div>
   </div>
 
-  <div class="footer-note">Conversión de alta fidelidad en la nube, con respaldo local en tu navegador si el servicio no está disponible.</div>
+  <div class="footer-note">La conversión ocurre 100% en tu navegador.</div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -330,6 +330,21 @@ async function getPageSetup(arrayBuffer){
   }
 }
 
+// mammoth deja espacios en blanco (saltos de línea del propio HTML) entre
+// imágenes seguidas dentro de un mismo párrafo. Con inline-block, ese
+// espacio en blanco se dibuja como un hueco visible entre una imagen y la
+// siguiente — en Word, esas imágenes van pegadas sin espacio.
+function removeWhitespaceBetweenImages(container){
+  container.querySelectorAll('p').forEach((p) => {
+    if (p.querySelectorAll('img').length < 2) return;
+    Array.from(p.childNodes).forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE && !node.textContent.trim()){
+        node.remove();
+      }
+    });
+  });
+}
+
 function applyImageLayout(container, layouts, innerWidthMM){
   const imgs = container.querySelectorAll('img');
   imgs.forEach((img, i) => {
@@ -366,10 +381,12 @@ function applyImageLayout(container, layouts, innerWidthMM){
         // igual en html2canvas, que no soporta bien las propiedades CSS
         // modernas. inline-block (no block) para que, si la imagen queda
         // más angosta que la columna, pueda seguir compartiendo línea con
-        // otra imagen de al lado — igual que en Word.
+        // otra imagen de al lado — igual que en Word. vertical-align:bottom
+        // porque así es como Word acomoda varias imágenes de distinto alto
+        // en la misma fila (alineadas por abajo, no por arriba).
         const boxRatioPct = (visH * natH) / (visW * natW) * 100;
         const wrap = document.createElement('span');
-        wrap.style.cssText = `display:inline-block; vertical-align:top; position:relative; overflow:hidden; width:100%; height:0;` +
+        wrap.style.cssText = `display:inline-block; vertical-align:bottom; position:relative; overflow:hidden; width:100%; height:0;` +
           `padding-top:${boxRatioPct.toFixed(4)}%;`;
         img.style.cssText = `position:absolute; max-width:none; width:${(100 / visW).toFixed(4)}%;` +
           `left:${(-crop.l / visW * 100).toFixed(4)}%; top:${(-crop.t / visH * 100).toFixed(4)}%;`;
@@ -381,7 +398,7 @@ function applyImageLayout(container, layouts, innerWidthMM){
         target.style.width = widthPct.toFixed(4) + '%';
         if (!hasCrop){
           target.style.display = 'inline-block';
-          target.style.verticalAlign = 'top';
+          target.style.verticalAlign = 'bottom';
         }
       }
       if (cssAlign){
@@ -414,6 +431,7 @@ async function handleFile(file){
     ]);
     docPageSetup = pageSetup;
     docPreview.innerHTML = result.value || '<p><em>(Documento vacío)</em></p>';
+    removeWhitespaceBetweenImages(docPreview);
     if (layouts.length){
       const innerWidthMM = pageSetup.widthMM - pageSetup.marginLeftMM - pageSetup.marginRightMM;
       applyImageLayout(docPreview, layouts, innerWidthMM);
@@ -492,10 +510,12 @@ function downloadBlob(blob, filename){
   a.remove();
 }
 
-// URL del Worker que hace la conversión de alta fidelidad (CloudConvert +
-// motor real de LibreOffice). Se reemplaza por la URL real tras desplegar
-// worker/ (ver worker/README.md). Mientras diga "REPLACE_", convertViaWorker
-// falla enseguida y se usa directo el conversor local de abajo.
+// El Worker de alta fidelidad (CloudConvert + LibreOffice) ya está
+// desplegado (ver worker/), pero en pausa: falta configurar la clave de
+// CloudConvert, y por ahora el conversor local ya da buenos resultados.
+// Poner esto en true (una vez configurada la clave) reactiva el camino de
+// alta fidelidad, con el conversor local como respaldo automático igual.
+const USE_WORKER = false;
 const WORKER_URL = 'https://word-a-pdf-worker.futuroiadesarrollo.workers.dev/convert';
 
 async function convertViaWorker(){
@@ -516,6 +536,12 @@ async function convertViaWorker(){
 
 convertBtn.addEventListener('click', async () => {
   if (!currentFile) return;
+
+  if (!USE_WORKER){
+    await convertClientSide();
+    return;
+  }
+
   convertBtn.disabled = true;
   progressWrap.classList.add('show');
   progressFill.style.width = '20%';
