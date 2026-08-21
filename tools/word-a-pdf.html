@@ -237,28 +237,39 @@ async function getImageLayout(arrayBuffer){
     const docXml = await docXmlFile.async('text');
 
     const layouts = [];
-    for (const m of docXml.matchAll(/<w:drawing>([\s\S]*?)<\/w:drawing>/g)){
-      const block = m[1];
-      const embedMatch = block.match(/r:embed="([^"]+)"/);
-      if (!embedMatch) continue;
-      const rectMatch = block.match(/<a:srcRect\b([^/]*)\/>/);
-      let crop = null;
-      if (rectMatch){
-        const attrs = rectMatch[1];
-        const get = (name) => {
-          const am = attrs.match(new RegExp(name + '="(-?\\d+)"'));
-          return am ? parseInt(am[1], 10) / 100000 : 0;
-        };
-        const l = get('l'), t = get('t'), r = get('r'), b = get('b');
-        if (l || t || r || b) crop = { l, t, r, b };
+    // Se recorre por párrafo (no solo por <w:drawing> suelto) para poder
+    // leer también la alineación real de ese párrafo (<w:jc>) — varias
+    // imágenes chicas puestas una junto a otra en la misma línea de Word
+    // deben quedar así en el PDF, no siempre centradas ni cada una en su
+    // propia línea.
+    for (const pm of docXml.matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g)){
+      const pBlock = pm[1];
+      if (!pBlock.includes('<w:drawing>')) continue;
+      const jcMatch = pBlock.match(/<w:jc\b[^>]*w:val="([^"]+)"/);
+      const align = jcMatch ? jcMatch[1] : null;
+      for (const m of pBlock.matchAll(/<w:drawing>([\s\S]*?)<\/w:drawing>/g)){
+        const block = m[1];
+        const embedMatch = block.match(/r:embed="([^"]+)"/);
+        if (!embedMatch) continue;
+        const rectMatch = block.match(/<a:srcRect\b([^/]*)\/>/);
+        let crop = null;
+        if (rectMatch){
+          const attrs = rectMatch[1];
+          const get = (name) => {
+            const am = attrs.match(new RegExp(name + '="(-?\\d+)"'));
+            return am ? parseInt(am[1], 10) / 100000 : 0;
+          };
+          const l = get('l'), t = get('t'), r = get('r'), b = get('b');
+          if (l || t || r || b) crop = { l, t, r, b };
+        }
+        const extentMatch = block.match(/<wp:extent\b([^/]*)\/>/);
+        let widthMM = null;
+        if (extentMatch){
+          const cxMatch = extentMatch[1].match(/cx="(\d+)"/);
+          if (cxMatch) widthMM = parseInt(cxMatch[1], 10) / 914400 * 25.4;
+        }
+        layouts.push({ crop, widthMM, align });
       }
-      const extentMatch = block.match(/<wp:extent\b([^/]*)\/>/);
-      let widthMM = null;
-      if (extentMatch){
-        const cxMatch = extentMatch[1].match(/cx="(\d+)"/);
-        if (cxMatch) widthMM = parseInt(cxMatch[1], 10) / 914400 * 25.4;
-      }
-      layouts.push({ crop, widthMM });
     }
     return layouts;
   } catch (err) {
@@ -339,6 +350,12 @@ function applyImageLayout(container, layouts, innerWidthMM){
       widthPct = Math.min(100, (info.widthMM / innerWidthMM) * 100);
     }
 
+    // La alineación real del párrafo en Word (<w:jc>) decide cómo se ubica
+    // la imagen — no se asume "centrada" por defecto, porque eso movía
+    // imágenes que en Word están a la izquierda (el valor por defecto).
+    const alignMap = { center: 'center', right: 'right', end: 'right', left: 'left', start: 'left', both: 'justify' };
+    const cssAlign = info && info.align && alignMap[info.align];
+
     const finish = () => {
       const natW = img.naturalWidth, natH = img.naturalHeight;
       if (!natW || !natH) return;
@@ -347,10 +364,12 @@ function applyImageLayout(container, layouts, innerWidthMM){
       if (hasCrop){
         // padding-top (en vez de aspect-ratio) para que el recorte se vea
         // igual en html2canvas, que no soporta bien las propiedades CSS
-        // modernas.
+        // modernas. inline-block (no block) para que, si la imagen queda
+        // más angosta que la columna, pueda seguir compartiendo línea con
+        // otra imagen de al lado — igual que en Word.
         const boxRatioPct = (visH * natH) / (visW * natW) * 100;
         const wrap = document.createElement('span');
-        wrap.style.cssText = `display:block; position:relative; overflow:hidden; width:100%; height:0;` +
+        wrap.style.cssText = `display:inline-block; vertical-align:top; position:relative; overflow:hidden; width:100%; height:0;` +
           `padding-top:${boxRatioPct.toFixed(4)}%;`;
         img.style.cssText = `position:absolute; max-width:none; width:${(100 / visW).toFixed(4)}%;` +
           `left:${(-crop.l / visW * 100).toFixed(4)}%; top:${(-crop.t / visH * 100).toFixed(4)}%;`;
@@ -360,9 +379,14 @@ function applyImageLayout(container, layouts, innerWidthMM){
       }
       if (widthPct != null && widthPct < 99.5){
         target.style.width = widthPct.toFixed(4) + '%';
-        target.style.marginLeft = 'auto';
-        target.style.marginRight = 'auto';
-        if (!hasCrop) target.style.display = 'block';
+        if (!hasCrop){
+          target.style.display = 'inline-block';
+          target.style.verticalAlign = 'top';
+        }
+      }
+      if (cssAlign){
+        const p = target.closest('p') || target.parentElement;
+        if (p) p.style.textAlign = cssAlign;
       }
     };
     if (img.complete && img.naturalWidth) finish();
