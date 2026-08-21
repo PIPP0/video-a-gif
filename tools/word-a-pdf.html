@@ -306,39 +306,61 @@ convertBtn.addEventListener('click', async () => {
   progressFill.style.width = '30%';
   progressLabel.innerHTML = '<span class="spin">⚙️</span> Generando PDF…';
 
-  const prevMaxHeight = docPreview.style.maxHeight;
-  const prevOverflow = docPreview.style.overflow;
   try {
     const baseName = currentFile.name.replace(/\.docx$/i, '') || 'documento';
 
-    // El recuadro de vista previa tiene scroll (max-height:480px); quitarlo aquí
-    // para que html2canvas capture el documento completo, no solo lo visible.
-    docPreview.style.maxHeight = 'none';
-    docPreview.style.overflow = 'visible';
-
-    // Los navegadores tienen un límite de tamaño de canvas (varía, pero ronda
-    // los ~65000px de alto). Un documento de muchas páginas capturado de una
-    // sola vez lo supera y produce un PDF en blanco. Por eso se captura en
-    // trozos de altura segura y luego se unen con pdf-lib.
-    const CHUNK_HEIGHT = 2400;
-    const totalHeight = Math.max(docPreview.scrollHeight, 1);
-    const chunkOffsets = [];
-    for (let y = 0; y < totalHeight; y += CHUNK_HEIGHT) chunkOffsets.push(y);
+    // Dividir el documento en bloques por sus propios elementos (párrafos,
+    // títulos, tablas...), no por coordenadas de píxeles. Cada bloque se
+    // renderiza por separado con el flujo simple y ya probado de html2pdf
+    // (.from(elemento).outputPdf()), evitando tanto el límite de tamaño de
+    // canvas de los navegadores en documentos largos como el recorte manual
+    // por coordenadas, que dejaba un espacio en blanco arriba del contenido.
+    const SAFE_HEIGHT = 3000;
+    const children = Array.from(docPreview.children);
+    const groups = [];
+    let current = [];
+    let currentHeight = 0;
+    for (const child of children){
+      const h = child.offsetHeight;
+      if (current.length > 0 && currentHeight + h > SAFE_HEIGHT){
+        groups.push(current);
+        current = [];
+        currentHeight = 0;
+      }
+      current.push(child);
+      currentHeight += h;
+    }
+    if (current.length) groups.push(current);
+    if (groups.length === 0) groups.push([]);
 
     const merged = await PDFLib.PDFDocument.create();
-    for (let i = 0; i < chunkOffsets.length; i++){
-      const y = chunkOffsets[i];
-      const h = Math.min(CHUNK_HEIGHT, totalHeight - y);
-      progressLabel.innerHTML = `<span class="spin">⚙️</span> Generando PDF… (parte ${i + 1} de ${chunkOffsets.length})`;
-      progressFill.style.width = Math.round(10 + (i / chunkOffsets.length) * 80) + '%';
+    for (let i = 0; i < groups.length; i++){
+      progressLabel.innerHTML = `<span class="spin">⚙️</span> Generando PDF… (parte ${i + 1} de ${groups.length})`;
+      progressFill.style.width = Math.round(10 + (i / groups.length) * 80) + '%';
 
-      const chunkOpt = {
-        margin: 12,
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, y, height: h, windowHeight: h },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      const chunkBlob = await html2pdf().set(chunkOpt).from(docPreview).outputPdf('blob');
+      const wrapper = document.createElement('div');
+      wrapper.className = 'doc-preview';
+      // Nada de position:fixed ni opacity:0 para ocultarlo: con cualquiera
+      // de los dos, html2canvas mide 0px de alto al clonar el elemento
+      // internamente y la captura sale en blanco. Con posición normal en el
+      // flujo del documento la captura sale bien; se agrega al final del
+      // body y se quita apenas termina de capturarse ese bloque.
+      wrapper.style.cssText = 'max-height:none; overflow:visible; width:' + docPreview.clientWidth + 'px;';
+      groups[i].forEach(node => wrapper.appendChild(node.cloneNode(true)));
+      document.body.appendChild(wrapper);
+
+      let chunkBlob;
+      try {
+        chunkBlob = await html2pdf().set({
+          margin: 12,
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        }).from(wrapper).outputPdf('blob');
+      } finally {
+        wrapper.remove();
+      }
+
       const chunkBytes = await chunkBlob.arrayBuffer();
       const chunkPdf = await PDFLib.PDFDocument.load(chunkBytes);
       const copiedPages = await merged.copyPages(chunkPdf, chunkPdf.getPageIndices());
@@ -366,8 +388,6 @@ convertBtn.addEventListener('click', async () => {
     console.error(err);
     showToast('Ocurrió un error al generar el PDF: ' + (err?.message || err));
   } finally {
-    docPreview.style.maxHeight = prevMaxHeight;
-    docPreview.style.overflow = prevOverflow;
     convertBtn.disabled = false;
     setTimeout(() => progressWrap.classList.remove('show'), 800);
   }
