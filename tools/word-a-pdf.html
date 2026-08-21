@@ -590,11 +590,6 @@ async function convertClientSide(){
     // bug real: deja un espacio en blanco arriba del contenido de la
     // primera página y a veces superpone texto. Evitarla por completo,
     // en vez de intentar corregirla, es lo que da un resultado confiable.
-    // Ancho real del contenido (sin el padding de .doc-preview), porque el
-    // bloque temporal para el PDF no lo usa: ese espacio ya lo pone el
-    // margen de la página.
-    const previewStyle = getComputedStyle(docPreview);
-    const contentWidth = Math.round(docPreview.clientWidth - parseFloat(previewStyle.paddingLeft) - parseFloat(previewStyle.paddingRight));
     // Tamaño de página real del Word (o A4/12mm si no se pudo leer), para
     // que el ancho de contenido del PDF coincida con el del documento
     // original en vez de forzar siempre A4.
@@ -602,6 +597,25 @@ async function convertClientSide(){
     const pdfMargin = [pageSetup.marginTopMM, pageSetup.marginRightMM, pageSetup.marginBottomMM, pageSetup.marginLeftMM];
     const innerWidthMM = pageSetup.widthMM - pageSetup.marginLeftMM - pageSetup.marginRightMM;
     const innerHeightMM = pageSetup.heightMM - pageSetup.marginTopMM - pageSetup.marginBottomMM;
+    // html2pdf arma su propio contenedor interno de captura con el ancho
+    // útil de la página convertido a píxeles a 96dpi — NO con el ancho que
+    // tenga en pantalla .doc-preview. Si nuestro bloque temporal usa un
+    // ancho distinto (por ejemplo, el del navegador), la captura queda dentro
+    // de un contenedor de html2pdf más ancho que nuestro contenido, y ese
+    // espacio de más se estira junto con todo lo demás al escalar a la
+    // página — el resultado es que TODO el contenido (texto e imágenes)
+    // sale más angosto de lo que debería, aunque el margen izquierdo se vea
+    // bien. Usar aquí el mismo cálculo evita ese desajuste para cualquier
+    // tamaño de página.
+    const contentWidth = Math.round(innerWidthMM / 25.4 * 96);
+    // .doc-preview usa box-sizing:border-box, así que su padding (32px por
+    // lado) hay que sumarlo al ancho total para que el ÁREA DE CONTENIDO
+    // (adentro del padding) quede exactamente en contentWidth px — si no,
+    // el texto se mide envuelto a un ancho distinto al que después usa el
+    // bloque temporal (que sí usa padding:0) para capturar.
+    const previewPadding = getComputedStyle(docPreview);
+    const previewPaddingX = parseFloat(previewPadding.paddingLeft) + parseFloat(previewPadding.paddingRight);
+    docPreview.style.width = (contentWidth + previewPaddingX) + 'px';
     const PAGE_INNER_RATIO = innerHeightMM / innerWidthMM;
     const SAFE_HEIGHT = Math.max(200, Math.floor(contentWidth * PAGE_INNER_RATIO * 0.85));
     const children = Array.from(docPreview.children);
