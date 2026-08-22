@@ -36,6 +36,11 @@
     font-size:14px;
   }
   .doc-preview img{ max-width:100%; }
+  /* El sitio fuerza "Sora" en todo h1/h2/h3 (assets/style.css) — eso
+     también pisaba la tipografía real del Word dentro de la vista previa.
+     Los títulos del documento deben heredar la fuente del documento, no
+     la del sitio. */
+  .doc-preview h1, .doc-preview h2, .doc-preview h3, .doc-preview h4{ font-family:inherit; }
   .doc-preview table{ border-collapse:collapse; width:100%; }
   .doc-preview td, .doc-preview th{ border:1px solid #ccc; padding:6px 8px; }
 
@@ -180,6 +185,7 @@ const step3 = document.getElementById('step3');
 
 let currentFile = null;
 let docPageSetup = null;
+let docFontFamily = null;
 let toastTimer = null;
 let dict = null;
 
@@ -330,6 +336,62 @@ async function getPageSetup(arrayBuffer){
   }
 }
 
+// Nombres de fuente conocidos por su forma (con serifa) para elegir un
+// respaldo genérico razonable cuando la fuente del Word no esté instalada
+// en el navegador ni disponible en Google Fonts.
+const SERIF_FONT_HINTS = /times|georgia|garamond|cambria|serif|palatino|book antiqua|constantia|cormorant|playfair|merriweather/i;
+
+// Lee la fuente real del documento desde word/styles.xml (<w:docDefaults>,
+// o si no, el estilo "Normal") — mammoth no trae esta información, así que
+// sin esto la vista previa y el PDF siempre usaban la fuente fija del CSS
+// (Georgia) sin importar qué fuente use realmente el Word.
+async function getDocFont(arrayBuffer){
+  try {
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const stylesFile = zip.file('word/styles.xml');
+    if (!stylesFile) return null;
+    const xml = await stylesFile.async('text');
+
+    const extractAscii = (block) => {
+      const m = block.match(/<w:rFonts\b[^>]*\bw:ascii="([^"]+)"/);
+      return m ? m[1] : null;
+    };
+
+    let fontName = null;
+    const normalMatch = xml.match(/<w:style\b[^>]*w:styleId="Normal"[^>]*>[\s\S]*?<\/w:style>/);
+    if (normalMatch) fontName = extractAscii(normalMatch[0]);
+    if (!fontName){
+      const defaultsMatch = xml.match(/<w:docDefaults>[\s\S]*?<\/w:docDefaults>/);
+      if (defaultsMatch) fontName = extractAscii(defaultsMatch[0]);
+    }
+    if (!fontName || /^(calibri|aptos)$/i.test(fontName.trim())){
+      // Calibri/Aptos son el default de Office cuando el usuario nunca
+      // tocó la fuente — con frecuencia el documento en realidad usa lo
+      // que el navegador ya trae por defecto; no vale la pena forzar una
+      // carga de Google Fonts para el caso más común y menos informativo.
+      return fontName && !/^(calibri|aptos)$/i.test(fontName.trim()) ? fontName.trim() : null;
+    }
+    return fontName.trim();
+  } catch (err) {
+    console.error('No se pudo leer la fuente del documento:', err);
+    return null;
+  }
+}
+
+const loadedGoogleFonts = new Set();
+function applyDocFont(fontName){
+  if (!fontName) return null;
+  const stack = `"${fontName}", ${SERIF_FONT_HINTS.test(fontName) ? "Georgia, 'Times New Roman', serif" : "Arial, Helvetica, sans-serif"}`;
+  if (!loadedGoogleFonts.has(fontName)){
+    loadedGoogleFonts.add(fontName);
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName).replace(/%20/g, '+')}:wght@400;700&display=swap`;
+    document.head.appendChild(link);
+  }
+  return stack;
+}
+
 // mammoth deja espacios en blanco (saltos de línea del propio HTML) entre
 // imágenes seguidas dentro de un mismo párrafo. Con inline-block, ese
 // espacio en blanco se dibuja como un hueco visible entre una imagen y la
@@ -424,12 +486,15 @@ async function handleFile(file){
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const [result, layouts, pageSetup] = await Promise.all([
+    const [result, layouts, pageSetup, fontName] = await Promise.all([
       mammoth.convertToHtml({ arrayBuffer }),
       getImageLayout(arrayBuffer),
-      getPageSetup(arrayBuffer)
+      getPageSetup(arrayBuffer),
+      getDocFont(arrayBuffer)
     ]);
     docPageSetup = pageSetup;
+    docFontFamily = applyDocFont(fontName);
+    docPreview.style.fontFamily = docFontFamily || '';
     docPreview.innerHTML = result.value || '<p><em>(Documento vacío)</em></p>';
     removeWhitespaceBetweenImages(docPreview);
     if (layouts.length){
@@ -699,7 +764,8 @@ async function convertClientSide(){
       // margin:12 más abajo); dejar también el padding de .doc-preview
       // duplicaba el espacio y el contenido salía más angosto que en la
       // vista previa real.
-      wrapper.style.cssText = 'max-height:none; overflow:visible; padding:0; width:' + contentWidth + 'px;';
+      wrapper.style.cssText = 'max-height:none; overflow:visible; padding:0; width:' + contentWidth + 'px;' +
+        (docFontFamily ? ' font-family:' + docFontFamily + ';' : '');
       expandedGroups[i].forEach(node => wrapper.appendChild(node.cloneNode(true)));
       document.body.appendChild(wrapper);
 
