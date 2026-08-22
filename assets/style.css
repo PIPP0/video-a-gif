@@ -157,6 +157,11 @@ h1, h2, h3, .brand-text{
   border:1px solid rgba(255,209,102,0.35);
   color:#ffd166;
 }
+.plan-tag.beta{
+  background:rgba(124,92,255,0.14);
+  border:1px solid rgba(124,92,255,0.35);
+  color:#a996ff;
+}
 .pro-hint{
   display:flex;
   align-items:center;
